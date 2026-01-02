@@ -56,8 +56,11 @@ alb_mixture <- livertests[livertests$Sex == "f", "ALB"]
 rinet_result <- predict_rinet(alb_mixture)
 
 cat("RINet Prediction (from mixture):\n")
-cat(sprintf("  Mean: %.2f\n", rinet_result[[1]]$mean))
-cat(sprintf("  SD:   %.2f\n", rinet_result[[1]]$std))
+cat(sprintf("  Reference Interval: [%.2f, %.2f]\n", 
+    rinet_result[[1]]$reference_interval["lower"],
+    rinet_result[[1]]$reference_interval["upper"]))
+cat(sprintf("  Log-Mean: %.2f\n", rinet_result[[1]]$mean))
+cat(sprintf("  Log-SD:   %.2f\n", rinet_result[[1]]$std))
 cat(sprintf("  Reference Fraction: %.2f\n", rinet_result[[1]]$reference_fraction))
 
 # Method 2: Direct calculation (requires knowing which samples are reference)
@@ -65,8 +68,14 @@ reference_only <- livertests[livertests$Sex == "f" &
                              livertests$Category == "reference", "ALB"]
 
 cat("\nDirect Method (reference samples only):\n")
-cat(sprintf("  Mean: %.2f\n", mean(reference_only)))
-cat(sprintf("  SD:   %.2f\n", sd(reference_only)))
+log_ref <- log(reference_only)
+log_mean <- mean(log_ref)
+log_sd <- sd(log_ref)
+cat(sprintf("  Reference Interval: [%.2f, %.2f]\n",
+    exp(log_mean + qnorm(0.025) * log_sd),
+    exp(log_mean + qnorm(0.975) * log_sd)))
+cat(sprintf("  Log-Mean: %.2f\n", log_mean))
+cat(sprintf("  Log-SD:   %.2f\n", log_sd))
 cat(sprintf("  Reference Fraction: %.2f\n", 
     length(reference_only) / length(alb_mixture)))
 ```
@@ -88,12 +97,18 @@ mixture_2d <- mixture_2d[complete.cases(mixture_2d), ]
 rinet_result <- predict_rinet(mixture_2d)
 
 cat("RINet Prediction (from mixture):\n")
-cat(sprintf("  Mean ALB:  %.2f\n", rinet_result[[1]]$mean[1]))
-cat(sprintf("  Mean PROT: %.2f\n", rinet_result[[1]]$mean[2]))
-cat(sprintf("  SD ALB:    %.2f\n", rinet_result[[1]]$std[1]))
-cat(sprintf("  SD PROT:   %.2f\n", rinet_result[[1]]$std[2]))
+cat(sprintf("  Log-Mean ALB:  %.2f\n", rinet_result[[1]]$mean[1]))
+cat(sprintf("  Log-Mean PROT: %.2f\n", rinet_result[[1]]$mean[2]))
+cat(sprintf("  Log-SD ALB:    %.2f\n", rinet_result[[1]]$std[1]))
+cat(sprintf("  Log-SD PROT:   %.2f\n", rinet_result[[1]]$std[2]))
 cat(sprintf("  Correlation: %.3f\n", rinet_result[[1]]$correlation))
 cat(sprintf("  Reference Fraction: %.2f\n", rinet_result[[1]]$reference_fraction))
+cat(sprintf("  Reference Region: %d ellipse vertices (original scale)\n", 
+    nrow(rinet_result[[1]]$reference_interval)))
+
+# Optional: plot the reference ellipse
+# plot(rinet_result[[1]]$reference_interval, type="l", 
+#      xlab="ALB", ylab="PROT", main="95% Reference Region")
 
 # Method 2: Direct calculation (requires knowing which samples are reference)
 reference_only <- livertests[livertests$Sex == "m" & 
@@ -102,13 +117,32 @@ reference_only <- livertests[livertests$Sex == "m" &
 reference_only <- reference_only[complete.cases(reference_only), ]
 
 cat("\nDirect Method (reference samples only):\n")
-cat(sprintf("  Mean ALB:  %.2f\n", mean(reference_only$ALB)))
-cat(sprintf("  Mean PROT: %.2f\n", mean(reference_only$PROT)))
-cat(sprintf("  SD ALB:    %.2f\n", sd(reference_only$ALB)))
-cat(sprintf("  SD PROT:   %.2f\n", sd(reference_only$PROT)))
-cat(sprintf("  Correlation: %.3f\n", cor(reference_only$ALB, reference_only$PROT)))
+log_ref_2d <- log(reference_only)
+log_mean_2d <- colMeans(log_ref_2d)
+log_cov_2d <- cov(log_ref_2d)
+
+# Create reference ellipse
+prob <- 0.95
+chi2_val <- qchisq(prob, df = 2)
+eigen_decomp <- eigen(log_cov_2d)
+theta <- seq(0, 2 * pi, length.out = 100)
+ellipse_log <- matrix(NA, nrow = 100, ncol = 2)
+for (j in 1:100) {
+  point <- sqrt(chi2_val) * c(sqrt(eigen_decomp$values[1]) * cos(theta[j]),
+                               sqrt(eigen_decomp$values[2]) * sin(theta[j]))
+  ellipse_log[j, ] <- eigen_decomp$vectors %*% point + log_mean_2d
+}
+ellipse_original <- exp(ellipse_log)
+
+cat(sprintf("  Log-Mean ALB:  %.2f\n", log_mean_2d[1]))
+cat(sprintf("  Log-Mean PROT: %.2f\n", log_mean_2d[2]))
+cat(sprintf("  Log-SD ALB:    %.2f\n", sqrt(log_cov_2d[1,1])))
+cat(sprintf("  Log-SD PROT:   %.2f\n", sqrt(log_cov_2d[2,2])))
+cat(sprintf("  Correlation: %.3f\n", cor(log_ref_2d$ALB, log_ref_2d$PROT)))
 cat(sprintf("  Reference Fraction: %.2f\n", 
     nrow(reference_only) / nrow(mixture_2d)))
+cat(sprintf("  Reference Region: %d ellipse vertices (original scale)\n", 
+    nrow(ellipse_original)))
 ```
 
 ## How it Works

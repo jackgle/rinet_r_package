@@ -8,7 +8,9 @@ predict_rinet_1d(
   data,
   feature_grid_range = c(-4, 4),
   feature_grid_nbins = 100,
-  verbose = 0
+  verbose = 0,
+  log_scale = TRUE,
+  percentiles = c(0.025, 0.975)
 )
 }
 \arguments{
@@ -22,14 +24,23 @@ for histogram binning. Default is c(-4, 4).}
 Default is 100.}
 
 \item{verbose}{Integer controlling verbosity (0 = silent). Default is 0.}
+
+\item{log_scale}{Logical indicating whether to log-transform the data before
+prediction. If TRUE (default), returns log-scale statistics and calculates
+reference intervals in the original scale. Default is TRUE.}
+
+\item{percentiles}{Numeric vector of length 2 specifying the lower and upper
+percentiles for the reference interval. Default is c(0.025, 0.975).}
 }
 \value{
 A list of predictions. Each element contains:
-  \item{mean}{Predicted mean (scalar)}
-  \item{std}{Predicted standard deviation (scalar)}
+  \item{mean}{Predicted mean (scalar, log-scale if log_scale=TRUE)}
+  \item{std}{Predicted standard deviation (scalar, log-scale if log_scale=TRUE)}
   \item{covariance}{Covariance matrix (1x1 matrix)}
   \item{correlation}{Always NA for 1D}
   \item{reference_fraction}{Predicted reference component fraction}
+  \item{reference_interval}{Reference interval in original scale (if log_scale=TRUE)}
+  \item{log_scale}{Logical indicating whether log-scaling was used}
 }
 \description{
 Takes one or more 1D samples and predicts the underlying reference

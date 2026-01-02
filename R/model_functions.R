@@ -167,12 +167,19 @@ NULL
 #' @param feature_grid_nbins Integer specifying the number of histogram bins.
 #'   Default is 100.
 #' @param verbose Integer controlling verbosity (0 = silent). Default is 0.
+#' @param log_scale Logical indicating whether to log-transform the data before
+#'   prediction. If TRUE (default), returns log-scale statistics and calculates
+#'   reference intervals in the original scale. Default is TRUE.
+#' @param percentiles Numeric vector of length 2 specifying the lower and upper
+#'   percentiles for the reference interval. Default is c(0.025, 0.975).
 #' @return A list of predictions. Each element contains:
-#'   \item{mean}{Predicted mean(s)}
-#'   \item{std}{Predicted standard deviation(s)}
+#'   \item{mean}{Predicted mean(s) (log-scale if log_scale=TRUE)}
+#'   \item{std}{Predicted standard deviation(s) (log-scale if log_scale=TRUE)}
 #'   \item{covariance}{Predicted covariance matrix}
 #'   \item{correlation}{Predicted correlation (NA for 1D)}
 #'   \item{reference_fraction}{Predicted reference component fraction}
+#'   \item{reference_interval}{Reference interval in original scale (if log_scale=TRUE)}
+#'   \item{log_scale}{Logical indicating whether log-scaling was used}
 #' @export
 #' @examples
 #' \dontrun{
@@ -189,7 +196,8 @@ NULL
 #'   results <- predict_rinet(samples)
 #' }
 predict_rinet <- function(data, feature_grid_range = c(-4, 4),
-                          feature_grid_nbins = 100, verbose = 0) {
+                          feature_grid_nbins = 100, verbose = 0,
+                          log_scale = TRUE, percentiles = c(0.025, 0.975)) {
   # Determine dimensionality from first sample
   if (is.list(data) && !is.data.frame(data)) {
     sample <- data[[1]]
@@ -216,9 +224,11 @@ predict_rinet <- function(data, feature_grid_range = c(-4, 4),
   
   # Call appropriate function
   if (ndim == 1) {
-    return(predict_rinet_1d(data, feature_grid_range, feature_grid_nbins, verbose))
+    return(predict_rinet_1d(data, feature_grid_range, feature_grid_nbins, verbose,
+                           log_scale, percentiles))
   } else {
-    return(predict_rinet_2d(data, feature_grid_range, feature_grid_nbins, verbose))
+    return(predict_rinet_2d(data, feature_grid_range, feature_grid_nbins, verbose,
+                           log_scale, percentiles))
   }
 }
 
@@ -235,12 +245,19 @@ predict_rinet <- function(data, feature_grid_range = c(-4, 4),
 #' @param feature_grid_nbins Integer specifying the number of histogram bins.
 #'   Default is 100.
 #' @param verbose Integer controlling verbosity (0 = silent). Default is 0.
+#' @param log_scale Logical indicating whether to log-transform the data before
+#'   prediction. If TRUE (default), returns log-scale statistics and calculates
+#'   reference intervals in the original scale. Default is TRUE.
+#' @param percentiles Numeric vector of length 2 specifying the lower and upper
+#'   percentiles for the reference interval. Default is c(0.025, 0.975).
 #' @return A list of predictions. Each element contains:
-#'   \item{mean}{Predicted mean (scalar)}
-#'   \item{std}{Predicted standard deviation (scalar)}
+#'   \item{mean}{Predicted mean (scalar, log-scale if log_scale=TRUE)}
+#'   \item{std}{Predicted standard deviation (scalar, log-scale if log_scale=TRUE)}
 #'   \item{covariance}{Covariance matrix (1x1 matrix)}
 #'   \item{correlation}{Always NA for 1D}
 #'   \item{reference_fraction}{Predicted reference component fraction}
+#'   \item{reference_interval}{Reference interval in original scale (if log_scale=TRUE)}
+#'   \item{log_scale}{Logical indicating whether log-scaling was used}
 #' @export
 #' @examples
 #' \dontrun{
@@ -254,10 +271,22 @@ predict_rinet <- function(data, feature_grid_range = c(-4, 4),
 #'   results <- predict_rinet_1d(samples)
 #' }
 predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4), 
-                             feature_grid_nbins = 100, verbose = 0) {
+                             feature_grid_nbins = 100, verbose = 0,
+                             log_scale = TRUE, percentiles = c(0.025, 0.975)) {
   # Convert to list if single sample
   if (!is.list(data) || is.data.frame(data)) {
     data <- list(as.vector(as.matrix(data)))
+  }
+  
+  # Apply log transformation if requested
+  original_data <- data
+  if (log_scale) {
+    data <- lapply(data, function(x) {
+      if (any(x <= 0)) {
+        stop("Log-scaling requires all values to be positive. Found zero or negative values.")
+      }
+      log(x)
+    })
   }
   
   # Load model and scaler
@@ -322,12 +351,24 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
     
     cov <- .correlation_to_covariance(matrix(1, 1, 1), scaled_std)
     
+    # Calculate reference interval if log-scaled
+    ref_interval <- NULL
+    if (log_scale) {
+      # Calculate RI from log-normal distribution
+      lower <- exp(scaled_mean + qnorm(percentiles[1]) * scaled_std)
+      upper <- exp(scaled_mean + qnorm(percentiles[2]) * scaled_std)
+      ref_interval <- c(lower, upper)
+      names(ref_interval) <- c("lower", "upper")
+    }
+    
     results[[i]] <- list(
       mean = scaled_mean,
       std = scaled_std,
       covariance = cov,
       correlation = NA,
-      reference_fraction = if (ncol(predictions) > 2) predictions[i, 3] else NA
+      reference_fraction = if (ncol(predictions) > 2) predictions[i, 3] else NA,
+      reference_interval = ref_interval,
+      log_scale = log_scale
     )
   }
   
@@ -347,12 +388,19 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
 #' @param feature_grid_nbins Integer specifying the number of histogram bins.
 #'   Default is 100.
 #' @param verbose Integer controlling verbosity (0 = silent). Default is 0.
+#' @param log_scale Logical indicating whether to log-transform the data before
+#'   prediction. If TRUE (default), returns log-scale statistics and calculates
+#'   reference intervals in the original scale. Default is TRUE.
+#' @param percentiles Numeric vector of length 2 specifying the lower and upper
+#'   percentiles for the reference interval. Default is c(0.025, 0.975).
 #' @return A list of predictions. Each element contains:
-#'   \item{mean}{Predicted means (vector of length 2)}
-#'   \item{std}{Predicted standard deviations (vector of length 2)}
+#'   \item{mean}{Predicted means (vector of length 2, log-scale if log_scale=TRUE)}
+#'   \item{std}{Predicted standard deviations (vector of length 2, log-scale if log_scale=TRUE)}
 #'   \item{covariance}{Predicted covariance matrix (2x2 matrix)}
 #'   \item{correlation}{Predicted correlation coefficient (scalar)}
 #'   \item{reference_fraction}{Predicted reference component fraction}
+#'   \item{reference_interval}{Reference region ellipse vertices (100x2 matrix) in original scale (if log_scale=TRUE)}
+#'   \item{log_scale}{Logical indicating whether log-scaling was used}
 #' @export
 #' @examples
 #' \dontrun{
@@ -368,10 +416,22 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
 #'   results <- predict_rinet_2d(samples)
 #' }
 predict_rinet_2d <- function(data, feature_grid_range = c(-4, 4),
-                             feature_grid_nbins = 100, verbose = 0) {
+                             feature_grid_nbins = 100, verbose = 0,
+                             log_scale = TRUE, percentiles = c(0.025, 0.975)) {
   # Convert to list if single sample
   if (!is.list(data) || is.data.frame(data)) {
     data <- list(as.matrix(data))
+  }
+  
+  # Apply log transformation if requested
+  original_data <- data
+  if (log_scale) {
+    data <- lapply(data, function(x) {
+      if (any(x <= 0)) {
+        stop("Log-scaling requires all values to be positive. Found zero or negative values.")
+      }
+      log(x)
+    })
   }
   
   # Ensure all are matrices
@@ -449,12 +509,44 @@ predict_rinet_2d <- function(data, feature_grid_range = c(-4, 4),
     corr_matrix <- matrix(c(1, p_cor, p_cor, 1), 2, 2)
     cov <- .correlation_to_covariance(corr_matrix, scaled_std)
     
+    # Calculate reference interval if log-scaled
+    ref_interval <- NULL
+    if (log_scale) {
+      # For 2D, create confidence ellipse in log-space and transform to original scale
+      # Determine chi-square quantile for the desired coverage
+      prob <- percentiles[2] - percentiles[1]  # e.g., 0.95 for (0.025, 0.975)
+      chi2_val <- qchisq(prob, df = 2)
+      
+      # Eigendecomposition of covariance matrix (in log-space)
+      eigen_decomp <- eigen(cov)
+      eigenvalues <- eigen_decomp$values
+      eigenvectors <- eigen_decomp$vectors
+      
+      # Generate ellipse vertices in log-space
+      theta <- seq(0, 2 * pi, length.out = 100)
+      ellipse_log <- matrix(NA, nrow = 100, ncol = 2)
+      
+      for (j in 1:100) {
+        # Parametric ellipse equation
+        point <- sqrt(chi2_val) * c(sqrt(eigenvalues[1]) * cos(theta[j]),
+                                     sqrt(eigenvalues[2]) * sin(theta[j]))
+        # Rotate using eigenvectors and translate to mean
+        ellipse_log[j, ] <- eigenvectors %*% point + scaled_mean
+      }
+      
+      # Exponentiate to transform back to original scale
+      ref_interval <- exp(ellipse_log)
+      colnames(ref_interval) <- c("dim1", "dim2")
+    }
+    
     results[[i]] <- list(
       mean = scaled_mean,
       std = scaled_std,
       covariance = cov,
       correlation = p_cor,
-      reference_fraction = if (ncol(predictions) > 5) predictions[i, 6] else NA
+      reference_fraction = if (ncol(predictions) > 5) predictions[i, 6] else NA,
+      reference_interval = ref_interval,
+      log_scale = log_scale
     )
   }
   
