@@ -2,8 +2,6 @@
 
 **RINet**: An R package for indirect estimation of clinical reference distributions using a neural network.
 
-## What it does
-
 RINet is designed to estimate the statistics of an underlying reference distribution (healthy population) from a mixture distribution of raw clinical measurements that include both healthy and pathological patients.
 
 Given samples from 1D or 2D mixture distributions, RINet predicts:
@@ -145,14 +143,6 @@ cat(sprintf("  Reference Region: %d ellipse vertices (original scale)\n",
     nrow(ellipse_original)))
 ```
 
-## How it Works
-
-1. **Standardization**: Input data is standardized (mean=0, sd=1)
-2. **Feature Extraction**: Histograms are computed and normalized
-3. **CNN Prediction**: Features are fed through the trained CNN
-4. **Inverse Transform**: Outputs are scaled back using the scaler
-5. **Destandardization**: Statistics are transformed to original scale
-
 Models are automatically loaded on first use and cached for efficiency.
 
 ## Package Structure
@@ -163,7 +153,7 @@ rinet/
 ├── NAMESPACE
 ├── LICENSE
 ├── R/
-│   └── model_functions.R      # predict_rinet_1d(), predict_rinet_2d()
+│   └── model_functions.R
 ├── man/
 │   └── rinet-package.Rd
 └── inst/
@@ -172,18 +162,6 @@ rinet/
         ├── rinet_2d.keras     # 2D CNN model
         ├── scaler_1d.pkl      # 1D scaler
         └── scaler_2d.pkl      # 2D scaler
-```
-
-## Development
-
-Rebuild documentation:
-```r
-devtools::document()
-```
-
-Check package:
-```r
-devtools::check()
 ```
 
 ## License
