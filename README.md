@@ -1,6 +1,6 @@
 # rinet
 
-**RINet**: An R package for predicting clinical reference intervals from mixture distributions using a neural network.
+**RINet**: An R package for indirect estimation of clinical reference distributions using a neural network.
 
 ## What it does
 
@@ -40,68 +40,75 @@ install_keras()
 
 ## Usage
 
-### 1D Example
+### 1D Example: Predicting Albumin (ALB) Reference Interval
 
 ```r
 library(rinet)
+library(reflimR)
 
-# Create a 1D mixture distribution
-# Reference component (healthy): 70% of samples, mean=100, sd=15
-# Pathological component 1: 20% of samples, mean=150, sd=20
-# Pathological component 2: 10% of samples, mean=60, sd=10
+# Load liver test data (mixture of reference and pathological samples)
+data(livertests)
 
-n <- 1000
-n_ref <- 700
-n_path1 <- 200
-n_path2 <- 100
+# Filter for females and extract ALB values
+alb_mixture <- livertests[livertests$Sex == "f", "ALB"]
 
-mixture_1d <- c(
-  rnorm(n_ref, mean = 100, sd = 15),   # Reference (healthy)
-  rnorm(n_path1, mean = 150, sd = 20), # Pathological high
-  rnorm(n_path2, mean = 60, sd = 10)   # Pathological low
-)
+# Method 1: RINet prediction from mixture
+rinet_result <- predict_rinet(alb_mixture)
 
-# Predict reference distribution statistics
-result <- predict_rinet(mixture_1d)
+cat("RINet Prediction (from mixture):\n")
+cat(sprintf("  Mean: %.2f\n", rinet_result[[1]]$mean))
+cat(sprintf("  SD:   %.2f\n", rinet_result[[1]]$std))
+cat(sprintf("  Reference Fraction: %.2f\n", rinet_result[[1]]$reference_fraction))
 
-# Access results
-result[[1]]$mean                  # Should be close to 100
-result[[1]]$std                   # Should be close to 15
-result[[1]]$reference_fraction    # Should be close to 0.70
+# Method 2: Direct calculation (requires knowing which samples are reference)
+reference_only <- livertests[livertests$Sex == "f" & 
+                             livertests$Category == "reference", "ALB"]
+
+cat("\nDirect Method (reference samples only):\n")
+cat(sprintf("  Mean: %.2f\n", mean(reference_only)))
+cat(sprintf("  SD:   %.2f\n", sd(reference_only)))
+cat(sprintf("  Reference Fraction: %.2f\n", 
+    length(reference_only) / length(alb_mixture)))
 ```
 
-### 2D Example
+### 2D Example: Predicting ALB and PROT Joint Distribution
 
 ```r
 library(rinet)
-library(MASS)  # for mvrnorm
+library(reflimR)
 
-# Create a 2D mixture distribution
-# Reference component (healthy): 75% of samples
-ref_mean <- c(120, 80)
-ref_sigma <- matrix(c(100, 30, 30, 64), 2, 2)  # correlation ~0.375
+# Load liver test data
+data(livertests)
 
-# Pathological component: 25% of samples
-path_mean <- c(90, 120)
-path_sigma <- matrix(c(144, -40, -40, 100), 2, 2)  # correlation ~-0.33
+# Filter for males and extract ALB and PROT values
+mixture_2d <- livertests[livertests$Sex == "m", c("ALB", "PROT")]
+mixture_2d <- mixture_2d[complete.cases(mixture_2d), ]
 
-n <- 1000
-n_ref <- 750
-n_path <- 250
+# Method 1: RINet prediction from mixture
+rinet_result <- predict_rinet(mixture_2d)
 
-mixture_2d <- rbind(
-  mvrnorm(n_ref, ref_mean, ref_sigma),   # Reference (healthy)
-  mvrnorm(n_path, path_mean, path_sigma) # Pathological
-)
+cat("RINet Prediction (from mixture):\n")
+cat(sprintf("  Mean ALB:  %.2f\n", rinet_result[[1]]$mean[1]))
+cat(sprintf("  Mean PROT: %.2f\n", rinet_result[[1]]$mean[2]))
+cat(sprintf("  SD ALB:    %.2f\n", rinet_result[[1]]$std[1]))
+cat(sprintf("  SD PROT:   %.2f\n", rinet_result[[1]]$std[2]))
+cat(sprintf("  Correlation: %.3f\n", rinet_result[[1]]$correlation))
+cat(sprintf("  Reference Fraction: %.2f\n", rinet_result[[1]]$reference_fraction))
 
-# Predict reference distribution statistics
-result <- predict_rinet(mixture_2d)
+# Method 2: Direct calculation (requires knowing which samples are reference)
+reference_only <- livertests[livertests$Sex == "m" & 
+                             livertests$Category == "reference", 
+                             c("ALB", "PROT")]
+reference_only <- reference_only[complete.cases(reference_only), ]
 
-# Access results
-result[[1]]$mean                  # Should be close to c(120, 80)
-result[[1]]$std                   # Should be close to c(10, 8)
-result[[1]]$correlation           # Should be close to 0.375
-result[[1]]$reference_fraction    # Should be close to 0.75
+cat("\nDirect Method (reference samples only):\n")
+cat(sprintf("  Mean ALB:  %.2f\n", mean(reference_only$ALB)))
+cat(sprintf("  Mean PROT: %.2f\n", mean(reference_only$PROT)))
+cat(sprintf("  SD ALB:    %.2f\n", sd(reference_only$ALB)))
+cat(sprintf("  SD PROT:   %.2f\n", sd(reference_only$PROT)))
+cat(sprintf("  Correlation: %.3f\n", cor(reference_only$ALB, reference_only$PROT)))
+cat(sprintf("  Reference Fraction: %.2f\n", 
+    nrow(reference_only) / nrow(mixture_2d)))
 ```
 
 ## How it Works
