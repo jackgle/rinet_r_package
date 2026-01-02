@@ -21,14 +21,8 @@ The package automatically detects whether your data is 1D or 2D and uses the app
 # Install devtools if you haven't already
 install.packages("devtools")
 
-# Install rinet from local directory
-devtools::install("/Users/jack/Code/rinet")
-```
-
-Or if you're in the package directory:
-
-```r
-devtools::install()
+# Install rinet from GitHub
+devtools::install_github("jackgle/rinet_r_package")
 ```
 
 ## Prerequisites

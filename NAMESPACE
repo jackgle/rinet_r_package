@@ -3,3 +3,4 @@
 export(predict_rinet)
 export(predict_rinet_1d)
 export(predict_rinet_2d)
+importFrom(stats,sd)

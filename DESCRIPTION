@@ -2,7 +2,7 @@ Package: rinet
 Type: Package
 Title: Predict Clinical Reference Intervals using RINet
 Version: 0.1.0
-Authors@R: person("Jack", "", email = "your.email@example.com", role = c("aut", "cre"))
+Authors@R: person("Jack LeBien", "", email = "jlebien@abartyshealth.com", role = c("aut", "cre"))
 Description: Predicts the statistics of an underlying reference distribution from a mixture distribution of raw clinical measurements (healthy and pathological patients). Uses pre-trained convolutional neural network (CNN) models to estimate the mean, standard deviation, and reference fraction from 1D or 2D sample data.
 License: MIT + file LICENSE
 Encoding: UTF-8
