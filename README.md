@@ -164,6 +164,12 @@ rinet/
         └── scaler_2d.pkl      # 2D scaler
 ```
 
+## Citation
+
+If you use this code in academic work, please cite the associated paper:
+
+LeBien, J., Velev, J., & Roche-Lima, A. (2026). RINet: synthetic data training for indirect estimation of clinical reference distributions. Journal of biomedical informatics, 104980. https://doi.org/10.1016/j.jbi.2026.104980
+
 ## License
 
 MIT License - see LICENSE file for details

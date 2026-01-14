@@ -172,6 +172,11 @@ NULL
 #'   reference intervals in the original scale. Default is TRUE.
 #' @param percentiles Numeric vector of length 2 specifying the lower and upper
 #'   percentiles for the reference interval. Default is c(0.025, 0.975).
+#' @param n_bootstrap Integer specifying the number of bootstrap resamples for
+#'   confidence intervals. Default is 0 (no bootstrap). When > 0, confidence
+#'   intervals are computed for all predicted statistics using batch inference.
+#' @param confidence_level Numeric specifying the confidence level for bootstrap
+#'   intervals. Default is 0.95.
 #' @return A list of predictions. Each element contains:
 #'   \item{mean}{Predicted mean(s) (log-scale if log_scale=TRUE)}
 #'   \item{std}{Predicted standard deviation(s) (log-scale if log_scale=TRUE)}
@@ -180,6 +185,7 @@ NULL
 #'   \item{reference_fraction}{Predicted reference component fraction}
 #'   \item{reference_interval}{Reference interval in original scale (if log_scale=TRUE)}
 #'   \item{log_scale}{Logical indicating whether log-scaling was used}
+#'   \item{bootstrap_ci}{List of bootstrap confidence intervals (if n_bootstrap > 0)}
 #' @export
 #' @examples
 #' \dontrun{
@@ -197,7 +203,8 @@ NULL
 #' }
 predict_rinet <- function(data, feature_grid_range = c(-4, 4),
                           feature_grid_nbins = 100, verbose = 0,
-                          log_scale = TRUE, percentiles = c(0.025, 0.975)) {
+                          log_scale = TRUE, percentiles = c(0.025, 0.975),
+                          n_bootstrap = 0, confidence_level = 0.95) {
   # Determine dimensionality from first sample
   if (is.list(data) && !is.data.frame(data)) {
     sample <- data[[1]]
@@ -225,10 +232,10 @@ predict_rinet <- function(data, feature_grid_range = c(-4, 4),
   # Call appropriate function
   if (ndim == 1) {
     return(predict_rinet_1d(data, feature_grid_range, feature_grid_nbins, verbose,
-                           log_scale, percentiles))
+                           log_scale, percentiles, n_bootstrap, confidence_level))
   } else {
     return(predict_rinet_2d(data, feature_grid_range, feature_grid_nbins, verbose,
-                           log_scale, percentiles))
+                           log_scale, percentiles, n_bootstrap, confidence_level))
   }
 }
 
@@ -250,6 +257,11 @@ predict_rinet <- function(data, feature_grid_range = c(-4, 4),
 #'   reference intervals in the original scale. Default is TRUE.
 #' @param percentiles Numeric vector of length 2 specifying the lower and upper
 #'   percentiles for the reference interval. Default is c(0.025, 0.975).
+#' @param n_bootstrap Integer specifying the number of bootstrap resamples for
+#'   confidence intervals. Default is 0 (no bootstrap). When > 0, confidence
+#'   intervals are computed for all predicted statistics.
+#' @param confidence_level Numeric specifying the confidence level for bootstrap
+#'   intervals. Default is 0.95.
 #' @return A list of predictions. Each element contains:
 #'   \item{mean}{Predicted mean (scalar, log-scale if log_scale=TRUE)}
 #'   \item{std}{Predicted standard deviation (scalar, log-scale if log_scale=TRUE)}
@@ -258,6 +270,9 @@ predict_rinet <- function(data, feature_grid_range = c(-4, 4),
 #'   \item{reference_fraction}{Predicted reference component fraction}
 #'   \item{reference_interval}{Reference interval in original scale (if log_scale=TRUE)}
 #'   \item{log_scale}{Logical indicating whether log-scaling was used}
+#'   \item{bootstrap_ci}{List of bootstrap confidence intervals (if n_bootstrap > 0):
+#'     mean_ci, std_ci, reference_fraction_ci, reference_interval_lower_ci,
+#'     reference_interval_upper_ci}
 #' @export
 #' @examples
 #' \dontrun{
@@ -270,14 +285,15 @@ predict_rinet <- function(data, feature_grid_range = c(-4, 4),
 #'   samples <- list(rnorm(1000, 3, 1.5), rnorm(1000, -2, 0.8))
 #'   results <- predict_rinet_1d(samples)
 #' }
-predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4), 
+predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
                              feature_grid_nbins = 100, verbose = 0,
-                             log_scale = TRUE, percentiles = c(0.025, 0.975)) {
+                             log_scale = TRUE, percentiles = c(0.025, 0.975),
+                             n_bootstrap = 0, confidence_level = 0.95) {
   # Convert to list if single sample
   if (!is.list(data) || is.data.frame(data)) {
     data <- list(as.vector(as.matrix(data)))
   }
-  
+
   # Apply log transformation if requested
   original_data <- data
   if (log_scale) {
@@ -288,42 +304,79 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
       log(x)
     })
   }
-  
+
   # Load model and scaler
   model <- .load_model(1)
   scaler <- .load_scaler(1)
-  
-  # Store original means and sds (using population SD to match Python/numpy ddof=0)
-  means <- lapply(data, mean)
-  stds <- lapply(data, function(x) {
+  np <- reticulate::import("numpy", convert = FALSE)
+
+  # Helper function to compute population SD
+  pop_sd <- function(x) {
     n <- length(x)
     sd(x) * sqrt((n - 1) / n)
-  })
-  
-  # Check for zero or near-zero variance
-  for (i in seq_along(stds)) {
-    if (is.na(stds[[i]]) || stds[[i]] < 1e-10) {
-      stop("Sample ", i, " has zero or near-zero variance.\n",
+  }
+
+  # Helper function to process a single sample and return features + standardization params
+  process_sample <- function(x) {
+    m <- mean(x)
+    s <- pop_sd(x)
+    if (is.na(s) || s < 1e-10) {
+      stop("Sample has zero or near-zero variance.\n",
            "RINet requires variability in the data for reference interval estimation.\n",
            "Constant or near-constant values are not valid inputs.")
     }
+    x_std <- (x - m) / s
+    feat <- .extract_features(x_std, ndim = 1,
+                              feature_grid_range = feature_grid_range,
+                              feature_grid_nbins = feature_grid_nbins)
+    list(features = feat, mean = m, std = s)
   }
-  
-  # Standardize data
-  data_std <- mapply(function(x, m, s) (x - m) / s, 
-                     data, means, stds, SIMPLIFY = FALSE)
-  
-  # Extract features
-  features <- lapply(data_std, .extract_features, ndim = 1,
-                    feature_grid_range = feature_grid_range,
-                    feature_grid_nbins = feature_grid_nbins)
-  
-  # Stack and add channel dimension (using np_array to ensure correct stacking order)
-  np <- reticulate::import("numpy", convert = FALSE)
-  features_array <- np$stack(features, axis = 0L)
+
+  # Process original samples
+  processed <- lapply(data, process_sample)
+  means <- lapply(processed, `[[`, "mean")
+  stds <- lapply(processed, `[[`, "std")
+  features <- lapply(processed, `[[`, "features")
+
+  # If bootstrap requested, generate resampled features
+  n_samples <- length(data)
+  bootstrap_indices <- NULL  # Track which bootstrap belongs to which original sample
+
+  if (n_bootstrap > 0) {
+    bootstrap_features <- list()
+    bootstrap_means <- list()
+    bootstrap_stds <- list()
+    bootstrap_indices <- integer(0)
+
+    for (i in seq_len(n_samples)) {
+      x <- data[[i]]
+      n <- length(x)
+      for (b in seq_len(n_bootstrap)) {
+        # Resample with replacement
+        x_boot <- sample(x, n, replace = TRUE)
+        proc <- process_sample(x_boot)
+        bootstrap_features <- c(bootstrap_features, list(proc$features))
+        bootstrap_means <- c(bootstrap_means, list(proc$mean))
+        bootstrap_stds <- c(bootstrap_stds, list(proc$std))
+        bootstrap_indices <- c(bootstrap_indices, i)
+      }
+    }
+
+    # Combine original and bootstrap features for batch prediction
+    all_features <- c(features, bootstrap_features)
+    all_means <- c(means, bootstrap_means)
+    all_stds <- c(stds, bootstrap_stds)
+  } else {
+    all_features <- features
+    all_means <- means
+    all_stds <- stds
+  }
+
+  # Stack and add channel dimension for batch prediction
+  features_array <- np$stack(all_features, axis = 0L)
   features_array <- np$expand_dims(features_array, axis = -1L)
-  
-  # Predict
+
+  # Predict (single batch call for all samples + bootstraps)
   predictions <- NULL
   helpers <- tryCatch(get(".py_silence", envir = parent.env(environment()), inherits = TRUE), error = function(e) NULL)
   if (!is.null(helpers) && !is.null(helpers$predict_silent)) {
@@ -335,43 +388,81 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
   if (is.null(predictions)) {
     predictions <- .silence_tf(model$predict(features_array, verbose = verbose))
   }
-  
+
   # Inverse transform using scaler
   predictions <- reticulate::py_to_r(scaler$inverse_transform(predictions))
-  
-  # Process results
-  results <- list()
-  for (i in seq_len(nrow(predictions))) {
-    p_mean <- predictions[i, 1]
-    p_std <- predictions[i, 2]
-    
-    # Scale back to original
-    scaled_mean <- (p_mean * stds[[i]]) + means[[i]]
-    scaled_std <- p_std * stds[[i]]
-    
-    cov <- .correlation_to_covariance(matrix(1, 1, 1), scaled_std)
-    
-    # Calculate reference interval if log-scaled
+
+  # Helper to compute scaled results from raw predictions
+  compute_result <- function(pred_row, m, s) {
+    p_mean <- pred_row[1]
+    p_std <- pred_row[2]
+    scaled_mean <- (p_mean * s) + m
+    scaled_std <- p_std * s
+    ref_frac <- if (length(pred_row) > 2) pred_row[3] else NA
+
     ref_interval <- NULL
     if (log_scale) {
-      # Calculate RI from log-normal distribution
       lower <- exp(scaled_mean + qnorm(percentiles[1]) * scaled_std)
       upper <- exp(scaled_mean + qnorm(percentiles[2]) * scaled_std)
-      ref_interval <- c(lower, upper)
-      names(ref_interval) <- c("lower", "upper")
+      ref_interval <- c(lower = lower, upper = upper)
     }
-    
-    results[[i]] <- list(
-      mean = scaled_mean,
-      std = scaled_std,
+
+    list(mean = scaled_mean, std = scaled_std,
+         reference_fraction = ref_frac, reference_interval = ref_interval)
+  }
+
+  # Process results
+  results <- list()
+  ci_alpha <- (1 - confidence_level) / 2
+  ci_probs <- c(ci_alpha, 1 - ci_alpha)
+
+  for (i in seq_len(n_samples)) {
+    # Original sample result
+    res <- compute_result(predictions[i, ], all_means[[i]], all_stds[[i]])
+
+    cov <- .correlation_to_covariance(matrix(1, 1, 1), res$std)
+
+    result_list <- list(
+      mean = res$mean,
+      std = res$std,
       covariance = cov,
       correlation = NA,
-      reference_fraction = if (ncol(predictions) > 2) predictions[i, 3] else NA,
-      reference_interval = ref_interval,
+      reference_fraction = res$reference_fraction,
+      reference_interval = res$reference_interval,
       log_scale = log_scale
     )
+
+    # Add bootstrap CIs if requested
+    if (n_bootstrap > 0) {
+      # Find bootstrap predictions for this sample
+      boot_idx <- which(bootstrap_indices == i) + n_samples
+      boot_results <- lapply(boot_idx, function(j) {
+        compute_result(predictions[j, ], all_means[[j]], all_stds[[j]])
+      })
+
+      boot_means <- sapply(boot_results, `[[`, "mean")
+      boot_stds <- sapply(boot_results, `[[`, "std")
+      boot_ref_fracs <- sapply(boot_results, `[[`, "reference_fraction")
+
+      ci_list <- list(
+        mean_ci = quantile(boot_means, probs = ci_probs, na.rm = TRUE),
+        std_ci = quantile(boot_stds, probs = ci_probs, na.rm = TRUE),
+        reference_fraction_ci = quantile(boot_ref_fracs, probs = ci_probs, na.rm = TRUE)
+      )
+
+      if (log_scale) {
+        boot_ri <- do.call(rbind, lapply(boot_results, `[[`, "reference_interval"))
+        ci_list$reference_interval_lower_ci <- quantile(boot_ri[, "lower"], probs = ci_probs, na.rm = TRUE)
+        ci_list$reference_interval_upper_ci <- quantile(boot_ri[, "upper"], probs = ci_probs, na.rm = TRUE)
+      }
+
+      result_list$bootstrap_ci <- ci_list
+      result_list$n_bootstrap <- n_bootstrap
+    }
+
+    results[[i]] <- result_list
   }
-  
+
   return(results)
 }
 
@@ -393,6 +484,11 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
 #'   reference intervals in the original scale. Default is TRUE.
 #' @param percentiles Numeric vector of length 2 specifying the lower and upper
 #'   percentiles for the reference interval. Default is c(0.025, 0.975).
+#' @param n_bootstrap Integer specifying the number of bootstrap resamples for
+#'   confidence intervals. Default is 0 (no bootstrap). When > 0, confidence
+#'   intervals are computed for all predicted statistics.
+#' @param confidence_level Numeric specifying the confidence level for bootstrap
+#'   intervals. Default is 0.95.
 #' @return A list of predictions. Each element contains:
 #'   \item{mean}{Predicted means (vector of length 2, log-scale if log_scale=TRUE)}
 #'   \item{std}{Predicted standard deviations (vector of length 2, log-scale if log_scale=TRUE)}
@@ -401,6 +497,8 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
 #'   \item{reference_fraction}{Predicted reference component fraction}
 #'   \item{reference_interval}{Reference region ellipse vertices (100x2 matrix) in original scale (if log_scale=TRUE)}
 #'   \item{log_scale}{Logical indicating whether log-scaling was used}
+#'   \item{bootstrap_ci}{List of bootstrap confidence intervals (if n_bootstrap > 0):
+#'     mean_ci (2x2 matrix), std_ci (2x2 matrix), correlation_ci, reference_fraction_ci}
 #' @export
 #' @examples
 #' \dontrun{
@@ -417,12 +515,13 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
 #' }
 predict_rinet_2d <- function(data, feature_grid_range = c(-4, 4),
                              feature_grid_nbins = 100, verbose = 0,
-                             log_scale = TRUE, percentiles = c(0.025, 0.975)) {
+                             log_scale = TRUE, percentiles = c(0.025, 0.975),
+                             n_bootstrap = 0, confidence_level = 0.95) {
   # Convert to list if single sample
   if (!is.list(data) || is.data.frame(data)) {
     data <- list(as.matrix(data))
   }
-  
+
   # Apply log transformation if requested
   original_data <- data
   if (log_scale) {
@@ -433,53 +532,90 @@ predict_rinet_2d <- function(data, feature_grid_range = c(-4, 4),
       log(x)
     })
   }
-  
+
   # Ensure all are matrices
   data <- lapply(data, as.matrix)
-  
+
   # Check dimensions
   if (any(sapply(data, ncol) != 2)) {
     stop("All samples must have 2 columns for 2D prediction")
   }
-  
+
   # Load model and scaler
   model <- .load_model(2)
   scaler <- .load_scaler(2)
-  
-  # Store original means and sds (using population SD to match Python/numpy ddof=0)
-  means <- lapply(data, colMeans)
-  stds <- lapply(data, function(x) {
+  np <- reticulate::import("numpy", convert = FALSE)
+
+  # Helper function to compute population SD
+ pop_sd_vec <- function(x) {
     n <- nrow(x)
     apply(x, 2, sd) * sqrt((n - 1) / n)
-  })
-  
-  # Check for zero or near-zero variance
-  for (i in seq_along(stds)) {
-    zero_var <- which(is.na(stds[[i]]) | stds[[i]] < 1e-10)
+  }
+
+  # Helper function to process a single sample and return features + standardization params
+  process_sample <- function(x) {
+    m <- colMeans(x)
+    s <- pop_sd_vec(x)
+    zero_var <- which(is.na(s) | s < 1e-10)
     if (length(zero_var) > 0) {
       dims <- paste(zero_var, collapse = ", ")
-      stop("Sample ", i, " has zero or near-zero variance in dimension(s): ", dims, ".\n",
+      stop("Sample has zero or near-zero variance in dimension(s): ", dims, ".\n",
            "RINet requires variability in the data for reference interval estimation.\n",
            "Constant or near-constant values are not valid inputs.")
     }
+    x_std <- sweep(sweep(x, 2, m, "-"), 2, s, "/")
+    feat <- .extract_features(x_std, ndim = 2,
+                              feature_grid_range = feature_grid_range,
+                              feature_grid_nbins = feature_grid_nbins)
+    list(features = feat, mean = m, std = s)
   }
-  
-  # Standardize data
-  data_std <- mapply(function(x, m, s) {
-    sweep(sweep(x, 2, m, "-"), 2, s, "/")
-  }, data, means, stds, SIMPLIFY = FALSE)
-  
-  # Extract features
-  features <- lapply(data_std, .extract_features, ndim = 2,
-                    feature_grid_range = feature_grid_range,
-                    feature_grid_nbins = feature_grid_nbins)
-  
-  # Stack and add channel dimension (using np_array to ensure correct stacking order)
-  np <- reticulate::import("numpy", convert = FALSE)
-  features_array <- np$stack(features, axis = 0L)
+
+  # Process original samples
+  processed <- lapply(data, process_sample)
+  means <- lapply(processed, `[[`, "mean")
+  stds <- lapply(processed, `[[`, "std")
+  features <- lapply(processed, `[[`, "features")
+
+  # If bootstrap requested, generate resampled features
+  n_samples <- length(data)
+  bootstrap_indices <- NULL
+
+  if (n_bootstrap > 0) {
+    bootstrap_features <- list()
+    bootstrap_means <- list()
+    bootstrap_stds <- list()
+    bootstrap_indices <- integer(0)
+
+    for (i in seq_len(n_samples)) {
+      x <- data[[i]]
+      n <- nrow(x)
+      for (b in seq_len(n_bootstrap)) {
+        # Resample rows with replacement
+        idx <- sample(n, n, replace = TRUE)
+        x_boot <- x[idx, , drop = FALSE]
+        proc <- process_sample(x_boot)
+        bootstrap_features <- c(bootstrap_features, list(proc$features))
+        bootstrap_means <- c(bootstrap_means, list(proc$mean))
+        bootstrap_stds <- c(bootstrap_stds, list(proc$std))
+        bootstrap_indices <- c(bootstrap_indices, i)
+      }
+    }
+
+    # Combine original and bootstrap features for batch prediction
+    all_features <- c(features, bootstrap_features)
+    all_means <- c(means, bootstrap_means)
+    all_stds <- c(stds, bootstrap_stds)
+  } else {
+    all_features <- features
+    all_means <- means
+    all_stds <- stds
+  }
+
+  # Stack and add channel dimension for batch prediction
+  features_array <- np$stack(all_features, axis = 0L)
   features_array <- np$expand_dims(features_array, axis = -1L)
-  
-  # Predict
+
+  # Predict (single batch call for all samples + bootstraps)
   predictions <- NULL
   helpers <- tryCatch(get(".py_silence", envir = parent.env(environment()), inherits = TRUE), error = function(e) NULL)
   if (!is.null(helpers) && !is.null(helpers$predict_silent)) {
@@ -491,64 +627,99 @@ predict_rinet_2d <- function(data, feature_grid_range = c(-4, 4),
   if (is.null(predictions)) {
     predictions <- .silence_tf(model$predict(features_array, verbose = verbose))
   }
-  
+
   # Inverse transform using scaler
   predictions <- reticulate::py_to_r(scaler$inverse_transform(predictions))
-  
-  # Process results
-  results <- list()
-  for (i in seq_len(nrow(predictions))) {
-    p_mean <- predictions[i, 1:2]
-    p_std <- predictions[i, 3:4]
-    p_cor <- predictions[i, 5]
-    
-    # Scale back to original
-    scaled_mean <- (p_mean * stds[[i]]) + means[[i]]
-    scaled_std <- p_std * stds[[i]]
-    
+
+  # Helper to compute scaled results from raw predictions
+  compute_result <- function(pred_row, m, s) {
+    p_mean <- pred_row[1:2]
+    p_std <- pred_row[3:4]
+    p_cor <- pred_row[5]
+
+    scaled_mean <- (p_mean * s) + m
+    scaled_std <- p_std * s
+    ref_frac <- if (length(pred_row) > 5) pred_row[6] else NA
+
     corr_matrix <- matrix(c(1, p_cor, p_cor, 1), 2, 2)
     cov <- .correlation_to_covariance(corr_matrix, scaled_std)
-    
-    # Calculate reference interval if log-scaled
+
     ref_interval <- NULL
     if (log_scale) {
-      # For 2D, create confidence ellipse in log-space and transform to original scale
-      # Determine chi-square quantile for the desired coverage
-      prob <- percentiles[2] - percentiles[1]  # e.g., 0.95 for (0.025, 0.975)
+      prob <- percentiles[2] - percentiles[1]
       chi2_val <- qchisq(prob, df = 2)
-      
-      # Eigendecomposition of covariance matrix (in log-space)
       eigen_decomp <- eigen(cov)
       eigenvalues <- eigen_decomp$values
       eigenvectors <- eigen_decomp$vectors
-      
-      # Generate ellipse vertices in log-space
       theta <- seq(0, 2 * pi, length.out = 100)
       ellipse_log <- matrix(NA, nrow = 100, ncol = 2)
-      
       for (j in 1:100) {
-        # Parametric ellipse equation
         point <- sqrt(chi2_val) * c(sqrt(eigenvalues[1]) * cos(theta[j]),
                                      sqrt(eigenvalues[2]) * sin(theta[j]))
-        # Rotate using eigenvectors and translate to mean
         ellipse_log[j, ] <- eigenvectors %*% point + scaled_mean
       }
-      
-      # Exponentiate to transform back to original scale
       ref_interval <- exp(ellipse_log)
       colnames(ref_interval) <- c("dim1", "dim2")
     }
-    
-    results[[i]] <- list(
-      mean = scaled_mean,
-      std = scaled_std,
-      covariance = cov,
-      correlation = p_cor,
-      reference_fraction = if (ncol(predictions) > 5) predictions[i, 6] else NA,
-      reference_interval = ref_interval,
+
+    list(mean = scaled_mean, std = scaled_std, correlation = p_cor,
+         covariance = cov, reference_fraction = ref_frac,
+         reference_interval = ref_interval)
+  }
+
+  # Process results
+  results <- list()
+  ci_alpha <- (1 - confidence_level) / 2
+  ci_probs <- c(ci_alpha, 1 - ci_alpha)
+
+  for (i in seq_len(n_samples)) {
+    # Original sample result
+    res <- compute_result(predictions[i, ], all_means[[i]], all_stds[[i]])
+
+    result_list <- list(
+      mean = res$mean,
+      std = res$std,
+      covariance = res$covariance,
+      correlation = res$correlation,
+      reference_fraction = res$reference_fraction,
+      reference_interval = res$reference_interval,
       log_scale = log_scale
     )
+
+    # Add bootstrap CIs if requested
+    if (n_bootstrap > 0) {
+      boot_idx <- which(bootstrap_indices == i) + n_samples
+      boot_results <- lapply(boot_idx, function(j) {
+        compute_result(predictions[j, ], all_means[[j]], all_stds[[j]])
+      })
+
+      # Extract vectors for each dimension
+      boot_mean1 <- sapply(boot_results, function(r) r$mean[1])
+      boot_mean2 <- sapply(boot_results, function(r) r$mean[2])
+      boot_std1 <- sapply(boot_results, function(r) r$std[1])
+      boot_std2 <- sapply(boot_results, function(r) r$std[2])
+      boot_cors <- sapply(boot_results, `[[`, "correlation")
+      boot_ref_fracs <- sapply(boot_results, `[[`, "reference_fraction")
+
+      ci_list <- list(
+        mean_ci = rbind(
+          quantile(boot_mean1, probs = ci_probs, na.rm = TRUE),
+          quantile(boot_mean2, probs = ci_probs, na.rm = TRUE)
+        ),
+        std_ci = rbind(
+          quantile(boot_std1, probs = ci_probs, na.rm = TRUE),
+          quantile(boot_std2, probs = ci_probs, na.rm = TRUE)
+        ),
+        correlation_ci = quantile(boot_cors, probs = ci_probs, na.rm = TRUE),
+        reference_fraction_ci = quantile(boot_ref_fracs, probs = ci_probs, na.rm = TRUE)
+      )
+
+      result_list$bootstrap_ci <- ci_list
+      result_list$n_bootstrap <- n_bootstrap
+    }
+
+    results[[i]] <- result_list
   }
-  
+
   return(results)
 }
