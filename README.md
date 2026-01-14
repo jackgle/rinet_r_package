@@ -1,29 +1,26 @@
 # rinet
 
+<!-- badges: start -->
+[![Lifecycle: maturing](https://img.shields.io/badge/lifecycle-maturing-blue.svg)](https://lifecycle.r-lib.org/articles/stages.html)
+<!-- badges: end -->
+
 **RINet**: An R package for indirect estimation of clinical reference distributions using a neural network.
-
-RINet is designed to estimate the statistics of an underlying reference distribution (healthy population) from a mixture distribution of raw clinical measurements that include both healthy and pathological patients.
-
-Given samples from 1D or 2D mixture distributions, RINet predicts:
-- Mean(s) of the reference component
-- Standard deviation(s) of the reference component
-- Correlation (2D only)
-- Covariance matrix
-- Reference component fraction (the proportion of "healthy" samples in the mixture)
-
-The package automatically detects whether your data is 1D or 2D and uses the appropriate model.
 
 ## Installation
 
+rinet is not yet on CRAN. A submission is planned in the near future.
+
+Install the development version from GitHub:
+
 ```r
-# Install devtools if you haven't already
-install.packages("devtools")
+# Install remotes if you haven't already
+install.packages("remotes")
 
 # Install rinet from GitHub
-devtools::install_github("jackgle/rinet_r_package")
+remotes::install_github("jackgle/rinet_r_package")
 ```
 
-## Prerequisites
+### Prerequisites
 
 This package requires the `keras` R package with TensorFlow:
 
@@ -35,6 +32,19 @@ install.packages(c("keras", "reticulate"))
 library(keras)
 install_keras()
 ```
+
+## Overview
+
+RINet estimates the statistics of an underlying reference distribution (healthy population) from a mixture distribution of raw clinical measurements that include both healthy and pathological patients.
+
+Given samples from 1D or 2D mixture distributions, RINet predicts:
+- Mean(s) of the reference component
+- Standard deviation(s) of the reference component
+- Correlation (2D only)
+- Covariance matrix
+- Reference component fraction (the proportion of "healthy" samples in the mixture)
+
+The package automatically detects whether your data is 1D or 2D and uses the appropriate model.
 
 ## Usage
 

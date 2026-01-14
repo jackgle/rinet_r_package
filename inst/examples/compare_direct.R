@@ -1,5 +1,3 @@
-devtools::load_all('.')
-
 library(rinet)
 library(reflimR)
 
@@ -11,6 +9,8 @@ alb_mixture <- livertests[livertests$Sex == "f", "ALB"]
 
 # Method 1: RINet prediction from mixture
 rinet_result <- predict_rinet(alb_mixture)
+# optionally with bootstrapping for confidence intervals
+# rinet_result <- predict_rinet(alb_mixture, n_bootstrap = 100, confidence_level = 0.95)
 
 cat("RINet Prediction (from mixture):\n")
 cat(sprintf("  Reference Interval: [%.2f, %.2f]\n", 
