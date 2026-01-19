@@ -10,7 +10,9 @@ predict_rinet(
   feature_grid_nbins = 100,
   verbose = 0,
   log_scale = TRUE,
-  percentiles = c(0.025, 0.975)
+  percentiles = c(0.025, 0.975),
+  n_bootstrap = 0,
+  confidence_level = 0.95
 )
 }
 \arguments{
@@ -31,6 +33,13 @@ reference intervals in the original scale. Default is TRUE.}
 
 \item{percentiles}{Numeric vector of length 2 specifying the lower and upper
 percentiles for the reference interval. Default is c(0.025, 0.975).}
+
+\item{n_bootstrap}{Integer specifying the number of bootstrap resamples for
+confidence intervals. Default is 0 (no bootstrap). When > 0, confidence
+intervals are computed for all predicted statistics using batch inference.}
+
+\item{confidence_level}{Numeric specifying the confidence level for bootstrap
+intervals. Default is 0.95.}
 }
 \value{
 A list of predictions. Each element contains:
@@ -41,6 +50,7 @@ A list of predictions. Each element contains:
   \item{reference_fraction}{Predicted reference component fraction}
   \item{reference_interval}{Reference interval in original scale (if log_scale=TRUE)}
   \item{log_scale}{Logical indicating whether log-scaling was used}
+  \item{bootstrap_ci}{List of bootstrap confidence intervals (if n_bootstrap > 0)}
 }
 \description{
 Automatically detects whether input data is 1D or 2D and calls the

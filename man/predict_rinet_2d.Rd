@@ -10,7 +10,9 @@ predict_rinet_2d(
   feature_grid_nbins = 100,
   verbose = 0,
   log_scale = TRUE,
-  percentiles = c(0.025, 0.975)
+  percentiles = c(0.025, 0.975),
+  n_bootstrap = 0,
+  confidence_level = 0.95
 )
 }
 \arguments{
@@ -31,6 +33,13 @@ reference intervals in the original scale. Default is TRUE.}
 
 \item{percentiles}{Numeric vector of length 2 specifying the lower and upper
 percentiles for the reference interval. Default is c(0.025, 0.975).}
+
+\item{n_bootstrap}{Integer specifying the number of bootstrap resamples for
+confidence intervals. Default is 0 (no bootstrap). When > 0, confidence
+intervals are computed for all predicted statistics.}
+
+\item{confidence_level}{Numeric specifying the confidence level for bootstrap
+intervals. Default is 0.95.}
 }
 \value{
 A list of predictions. Each element contains:
@@ -41,6 +50,8 @@ A list of predictions. Each element contains:
   \item{reference_fraction}{Predicted reference component fraction}
   \item{reference_interval}{Reference region ellipse vertices (100x2 matrix) in original scale (if log_scale=TRUE)}
   \item{log_scale}{Logical indicating whether log-scaling was used}
+  \item{bootstrap_ci}{List of bootstrap confidence intervals (if n_bootstrap > 0):
+    mean_ci (2x2 matrix), std_ci (2x2 matrix), correlation_ci, reference_fraction_ci}
 }
 \description{
 Takes one or more 2D samples and predicts the underlying reference

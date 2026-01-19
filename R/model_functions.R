@@ -54,16 +54,10 @@ NULL
            "\nMake sure ", model_file, " is in inst/models/")
     }
     
-    message("Loading ", ndim, "D model...")
-    if (!is.null(helpers) && !is.null(helpers$load_model_silent)) {
-      .models[[model_key]] <- tryCatch(
-        helpers$load_model_silent(model_path),
-        error = function(e) NULL
-      )
-    }
-    if (is.null(.models[[model_key]])) {
-      .models[[model_key]] <- .silence_tf(keras::load_model_tf(model_path))
-    }
+    message("Loading ", ndim, "D model (this may take a moment on first use)...")
+    keras <- reticulate::import("keras")
+    .models[[model_key]] <- keras$models$load_model(model_path)
+    message("Model loaded.")
   }
   
   return(.models[[model_key]])

@@ -8,30 +8,35 @@
 
 ## Installation
 
-rinet is not yet on CRAN. A submission is planned in the near future.
+### Step 1: Install R package
 
-Install the development version from GitHub:
+Install from CRAN:
 
 ```r
-# Install remotes if you haven't already
-install.packages("remotes")
+install.packages("rinet")
+```
 
-# Install rinet from GitHub
+Or install the development version from GitHub:
+
+```r
+install.packages("remotes")
 remotes::install_github("jackgle/rinet_r_package")
 ```
 
-### Prerequisites
+### Step 2: Install Python dependencies (required)
 
-This package requires the `keras` R package with TensorFlow:
+This package requires Python with TensorFlow, Keras, and scikit-learn. Install them once:
 
 ```r
-# Install keras R package
-install.packages(c("keras", "reticulate"))
+# Install reticulate
+install.packages("reticulate")
 
-# Install TensorFlow backend
-library(keras)
-install_keras()
+# Install Python dependencies
+library(reticulate)
+py_install(c("tensorflow", "keras", "scikit-learn"))
 ```
+
+After this setup, restart R and you're ready to use rinet.
 
 ## Overview
 

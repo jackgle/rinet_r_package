@@ -72,3 +72,27 @@
   
   invisible()
 }
+
+.onAttach <- function(libname, pkgname) {
+  # Check for all required Python packages
+  missing_packages <- c()
+  if (!reticulate::py_module_available("tensorflow")) {
+    missing_packages <- c(missing_packages, "tensorflow")
+  }
+  if (!reticulate::py_module_available("keras")) {
+    missing_packages <- c(missing_packages, "keras")
+  }
+  if (!reticulate::py_module_available("sklearn")) {
+    missing_packages <- c(missing_packages, "scikit-learn")
+  }
+  
+  if (length(missing_packages) > 0) {
+    packageStartupMessage(
+      "rinet requires Python packages: ", paste(missing_packages, collapse = ", "), "\n",
+      "Install them with:\n",
+      "  library(reticulate)\n",
+      "  py_install(c(\"tensorflow\", \"keras\", \"scikit-learn\"))\n",
+      "See README for details."
+    )
+  }
+}
