@@ -3,4 +3,7 @@
 export(predict_rinet)
 export(predict_rinet_1d)
 export(predict_rinet_2d)
+importFrom(stats,qchisq)
+importFrom(stats,qnorm)
+importFrom(stats,quantile)
 importFrom(stats,sd)

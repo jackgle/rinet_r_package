@@ -1,4 +1,4 @@
-#' @importFrom stats sd
+#' @importFrom stats sd qnorm qchisq quantile
 NULL
 
 # Internal environment to cache loaded models
