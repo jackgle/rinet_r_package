@@ -60,14 +60,12 @@ population statistics (mean, std, reference fraction) from a mixture
 of healthy and pathological measurements.
 }
 \examples{
-\dontrun{
-  # Single sample
-  sample1 <- rnorm(1000, mean = 5, sd = 2)
-  result <- predict_rinet_1d(sample1)
-  print(result[[1]]$mean)
-  
-  # Multiple samples
-  samples <- list(rnorm(1000, 3, 1.5), rnorm(1000, -2, 0.8))
-  results <- predict_rinet_1d(samples)
-}
+# Single sample (using positive data for log-scale)
+sample1 <- exp(rnorm(1000, mean = 2, sd = 0.3))
+result <- predict_rinet_1d(sample1)
+print(result[[1]]$mean)
+
+# Multiple samples
+samples <- list(exp(rnorm(1000, 2, 0.3)), exp(rnorm(1000, 1.5, 0.4)))
+results <- predict_rinet_1d(samples)
 }

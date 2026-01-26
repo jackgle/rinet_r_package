@@ -59,17 +59,16 @@ It estimates the statistics of a "healthy" reference population from a
 mixture of healthy and pathological measurements.
 }
 \examples{
-\dontrun{
-  # 1D sample
-  sample_1d <- rnorm(1000)
-  result <- predict_rinet(sample_1d)
-  
-  # 2D sample
-  sample_2d <- matrix(rnorm(2000), ncol = 2)
-  result <- predict_rinet(sample_2d)
-  
-  # Multiple samples (automatically detected)
-  samples <- list(rnorm(1000), rnorm(1000))
-  results <- predict_rinet(samples)
-}
+# 1D sample (using positive data for log-scale)
+sample_1d <- exp(rnorm(1000, mean = 2, sd = 0.5))
+result <- predict_rinet(sample_1d)
+
+# 2D sample (using positive data for log-scale)
+sample_2d <- exp(matrix(rnorm(2000, mean = 2, sd = 0.5), ncol = 2))
+result <- predict_rinet(sample_2d)
+
+# Multiple samples (automatically detected)
+samples <- list(exp(rnorm(1000, mean = 2, sd = 0.5)), 
+                exp(rnorm(1000, mean = 2, sd = 0.5)))
+results <- predict_rinet(samples)
 }

@@ -59,16 +59,14 @@ population statistics (means, stds, correlation, reference fraction)
 from a mixture of healthy and pathological measurements.
 }
 \examples{
-\dontrun{
-  # Single 2D sample
-  sample1 <- matrix(rnorm(2000), ncol = 2)
-  result <- predict_rinet_2d(sample1)
-  print(result[[1]]$mean)
-  print(result[[1]]$covariance)
-  
-  # Multiple samples
-  samples <- list(matrix(rnorm(2000), ncol = 2), 
-                  matrix(rnorm(2000), ncol = 2))
-  results <- predict_rinet_2d(samples)
-}
+# Single 2D sample (using positive data for log-scale)
+sample1 <- exp(matrix(rnorm(2000, mean = 2, sd = 0.3), ncol = 2))
+result <- predict_rinet_2d(sample1)
+print(result[[1]]$mean)
+print(result[[1]]$covariance)
+
+# Multiple samples
+samples <- list(exp(matrix(rnorm(2000, mean = 2, sd = 0.3), ncol = 2)), 
+                exp(matrix(rnorm(2000, mean = 2, sd = 0.3), ncol = 2)))
+results <- predict_rinet_2d(samples)
 }

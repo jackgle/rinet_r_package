@@ -3,7 +3,7 @@ Type: Package
 Title: Clinical Reference Interval Estimation with Reference Interval Network (RINet)
 Version: 0.1.0
 Authors@R: person("Jack LeBien", "", email = "jackgl4124@gmail.com", role = c("aut", "cre"))
-Description: Predicts statistics of a reference distribution from a mixture of raw clinical measurements (healthy and pathological). Uses pre-trained convolutional neural network models to estimate the mean, standard deviation, and reference fraction from 1D or 2D sample data.
+Description: Predicts statistics of a reference distribution from a mixture of raw clinical measurements (healthy and pathological). Uses pre-trained convolutional neural network models to estimate the mean, standard deviation, and reference fraction from 1D or 2D sample data. Methods are described in LeBien, Velev, and Roche-Lima (2026) "RINet: synthetic data training for indirect estimation of clinical reference distributions" <doi:10.1016/j.jbi.2026.104980>.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
