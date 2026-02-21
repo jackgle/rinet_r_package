@@ -182,18 +182,20 @@ NULL
 #'   \item{bootstrap_ci}{List of bootstrap confidence intervals (if n_bootstrap > 0)}
 #' @export
 #' @examples
-#' # 1D sample (using positive data for log-scale)
-#' sample_1d <- exp(rnorm(1000, mean = 2, sd = 0.5))
-#' result <- predict_rinet(sample_1d)
+#' \dontrun{
+#'   # 1D sample (using positive data for log-scale)
+#'   sample_1d <- exp(rnorm(1000, mean = 2, sd = 0.5))
+#'   result <- predict_rinet(sample_1d)
 #' 
-#' # 2D sample (using positive data for log-scale)
-#' sample_2d <- exp(matrix(rnorm(2000, mean = 2, sd = 0.5), ncol = 2))
-#' result <- predict_rinet(sample_2d)
+#'   # 2D sample (using positive data for log-scale)
+#'   sample_2d <- exp(matrix(rnorm(2000, mean = 2, sd = 0.5), ncol = 2))
+#'   result <- predict_rinet(sample_2d)
 #' 
-#' # Multiple samples (automatically detected)
-#' samples <- list(exp(rnorm(1000, mean = 2, sd = 0.5)), 
-#'                 exp(rnorm(1000, mean = 2, sd = 0.5)))
-#' results <- predict_rinet(samples)
+#'   # Multiple samples (automatically detected)
+#'   samples <- list(exp(rnorm(1000, mean = 2, sd = 0.5)),
+#'                   exp(rnorm(1000, mean = 2, sd = 0.5)))
+#'   results <- predict_rinet(samples)
+#' }
 predict_rinet <- function(data, feature_grid_range = c(-4, 4),
                           feature_grid_nbins = 100, verbose = 0,
                           log_scale = TRUE, percentiles = c(0.025, 0.975),
@@ -268,14 +270,16 @@ predict_rinet <- function(data, feature_grid_range = c(-4, 4),
 #'     reference_interval_upper_ci}
 #' @export
 #' @examples
-#' # Single sample (using positive data for log-scale)
-#' sample1 <- exp(rnorm(1000, mean = 2, sd = 0.3))
-#' result <- predict_rinet_1d(sample1)
-#' print(result[[1]]$mean)
+#' \dontrun{
+#'   # Single sample (using positive data for log-scale)
+#'   sample1 <- exp(rnorm(1000, mean = 2, sd = 0.3))
+#'   result <- predict_rinet_1d(sample1)
+#'   print(result[[1]]$mean)
 #' 
-#' # Multiple samples
-#' samples <- list(exp(rnorm(1000, 2, 0.3)), exp(rnorm(1000, 1.5, 0.4)))
-#' results <- predict_rinet_1d(samples)
+#'   # Multiple samples
+#'   samples <- list(exp(rnorm(1000, 2, 0.3)), exp(rnorm(1000, 1.5, 0.4)))
+#'   results <- predict_rinet_1d(samples)
+#' }
 predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
                              feature_grid_nbins = 100, verbose = 0,
                              log_scale = TRUE, percentiles = c(0.025, 0.975),
@@ -492,16 +496,18 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
 #'     mean_ci (2x2 matrix), std_ci (2x2 matrix), correlation_ci, reference_fraction_ci}
 #' @export
 #' @examples
-#' # Single 2D sample (using positive data for log-scale)
-#' sample1 <- exp(matrix(rnorm(2000, mean = 2, sd = 0.3), ncol = 2))
-#' result <- predict_rinet_2d(sample1)
-#' print(result[[1]]$mean)
-#' print(result[[1]]$covariance)
+#' \dontrun{
+#'   # Single 2D sample (using positive data for log-scale)
+#'   sample1 <- exp(matrix(rnorm(2000, mean = 2, sd = 0.3), ncol = 2))
+#'   result <- predict_rinet_2d(sample1)
+#'   print(result[[1]]$mean)
+#'   print(result[[1]]$covariance)
 #' 
-#' # Multiple samples
-#' samples <- list(exp(matrix(rnorm(2000, mean = 2, sd = 0.3), ncol = 2)), 
-#'                 exp(matrix(rnorm(2000, mean = 2, sd = 0.3), ncol = 2)))
-#' results <- predict_rinet_2d(samples)
+#'   # Multiple samples
+#'   samples <- list(exp(matrix(rnorm(2000, mean = 2, sd = 0.3), ncol = 2)),
+#'                   exp(matrix(rnorm(2000, mean = 2, sd = 0.3), ncol = 2)))
+#'   results <- predict_rinet_2d(samples)
+#' }
 predict_rinet_2d <- function(data, feature_grid_range = c(-4, 4),
                              feature_grid_nbins = 100, verbose = 0,
                              log_scale = TRUE, percentiles = c(0.025, 0.975),
