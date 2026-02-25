@@ -374,7 +374,7 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
   # Predict (single batch call for all samples + bootstraps)
   predictions <- NULL
   helpers <- tryCatch(get(".py_silence", envir = parent.env(environment()), inherits = TRUE), error = function(e) NULL)
-  if (!is.null(helpers) && !is.null(helpers$predict_silent)) {
+  if (!is.null(helpers)) {
     predictions <- tryCatch(
       helpers$predict_silent(model, features_array, verbose = verbose),
       error = function(e) NULL
@@ -613,7 +613,7 @@ predict_rinet_2d <- function(data, feature_grid_range = c(-4, 4),
   # Predict (single batch call for all samples + bootstraps)
   predictions <- NULL
   helpers <- tryCatch(get(".py_silence", envir = parent.env(environment()), inherits = TRUE), error = function(e) NULL)
-  if (!is.null(helpers) && !is.null(helpers$predict_silent)) {
+  if (!is.null(helpers)) {
     predictions <- tryCatch(
       helpers$predict_silent(model, features_array, verbose = verbose),
       error = function(e) NULL

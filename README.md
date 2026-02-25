@@ -25,18 +25,14 @@ remotes::install_github("jackgle/rinet_r_package")
 
 ### Step 2: Install Python dependencies (required)
 
-This package requires Python with TensorFlow, Keras, and scikit-learn. Install them once:
+This package uses Python (via reticulate) for its neural network models. You need TensorFlow, Keras, and scikit-learn installed once:
 
 ```r
-# Install reticulate
-install.packages("reticulate")
-
-# Install Python dependencies
 library(reticulate)
 py_install(c("tensorflow", "keras", "scikit-learn"))
 ```
 
-After this setup, restart R and you're ready to use rinet.
+Then restart R and you're ready to use rinet.
 
 ## Overview
 
