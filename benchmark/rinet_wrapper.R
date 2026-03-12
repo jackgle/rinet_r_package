@@ -9,6 +9,9 @@ library(rinet)
 
 estimateRIs <- function(Data = NULL, percentiles = c(0.025, 0.975), ...) {
 
+  # Remove non-positive values (rounding artifacts) for log-scale
+  Data <- Data[Data > 0]
+
   result <- tryCatch(
     predict_rinet_1d(
       data        = Data,

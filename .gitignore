@@ -24,4 +24,12 @@ Thumbs.db
 # Build files
 *.tar.gz
 
+# Data
+*.csv
+*.tsv
+*.Rdata
+*.png
+*.pdf
+
 tmp/
+benchmark/RIbench/
