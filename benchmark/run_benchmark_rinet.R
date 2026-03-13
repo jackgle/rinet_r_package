@@ -10,7 +10,7 @@
 #   # rinet must be installed (or loaded via devtools::load_all())
 #
 # Usage:
-#   Rscript benchmark/run_benchmark.R [subset] [--outliers] [--workdir PATH] [--outdir PATH]
+#   Rscript benchmark/run_benchmark_rinet.R [subset] [--outliers] [--no-log-normal] [--workdir PATH] [--outdir PATH]
 #
 #   subset (optional): controls which test sets to run
 #     - "all" (default)    — run all 5,760 test sets
@@ -20,6 +20,9 @@
 #     - distribution type  — e.g. "normal", "skewed", "heavilySkewed", "shifted"
 #
 #   --outliers (optional): apply Tukey 1.5x IQR outlier removal on log-scale
+#     Can appear anywhere in the argument list.
+#
+#   --no-log-normal (optional): disable log-scaling for analytes with Distribution == "normal"
 #     Can appear anywhere in the argument list.
 #
 #   --workdir PATH (optional): path to working directory containing Data/ subfolder
@@ -38,8 +41,9 @@ library(data.table)
 args <- commandArgs(trailingOnly = TRUE)
 
 # Separate flag arguments from positional arguments
-all_flags <- c("--outliers", "--tukey", "--iqr", "--workdir", "--outdir")
+all_flags <- c("--outliers", "--tukey", "--iqr", "--no-log-normal", "--workdir", "--outdir")
 use_outlier_removal <- any(tolower(args) %in% c("--outliers", "--tukey", "--iqr"))
+no_log_normal <- any(args == "--no-log-normal")
 workdir_pos <- match("--workdir", args)
 outdir_pos <- match("--outdir", args)
 positional_args <- args[!args %in% all_flags & !seq_along(args) %in% c(workdir_pos + 1, outdir_pos + 1)]
@@ -68,7 +72,8 @@ cat("=== RIbench Evaluation for RINet ===\n")
 cat("Working directory:", working_dir, "\n")
 cat("Output directory:", output_dir, "\n")
 cat("Subset:", subset_arg, "\n")
-cat("Outlier removal:", if (use_outlier_removal) "ON (Tukey 1.5x IQR on log-scale)" else "OFF", "\n\n")
+cat("Outlier removal:", if (use_outlier_removal) "ON (Tukey 1.5x IQR on log-scale)" else "OFF", "\n")
+cat("Log-scale for normal:", if (no_log_normal) "OFF" else "ON", "\n\n")
 
 # ---------------------------------------------------------------------------
 # Step 1: Determine test set definitions
@@ -138,12 +143,15 @@ for (i in seq_len(nrow(testsets))) {
     next
   }
 
-  # Read data and remove non-positive values (rounding artifacts) for log-scale
+  # Determine whether to use log-scale for this test set
+  use_log_scale <- !(no_log_normal && row$Distribution == "normal")
+
+  # Read data; remove non-positive values only when using log-scale
   data_vec <- fread(csv_file)$V1
-  data_vec <- data_vec[data_vec > 0]
+  if (use_log_scale) data_vec <- data_vec[data_vec > 0]
 
   # Optional outlier removal using Tukey's fences (1.5x IQR) on log-scale
-  if (use_outlier_removal) {
+  if (use_outlier_removal && use_log_scale) {
     log_vec <- log(data_vec)
     q1 <- quantile(log_vec, 0.25)
     q3 <- quantile(log_vec, 0.75)
@@ -155,7 +163,7 @@ for (i in seq_len(nrow(testsets))) {
   # Predict
   t_iter <- system.time({
     result <- tryCatch({
-      res <- predict_rinet_1d(data_vec, log_scale = TRUE, percentiles = percentiles)
+      res <- predict_rinet_1d(data_vec, log_scale = use_log_scale, percentiles = percentiles)
       ri <- res[[1]]$reference_interval
       data.frame(Percentile = percentiles, PointEst = as.numeric(ri))
     }, error = function(e) {

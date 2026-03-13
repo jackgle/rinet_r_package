@@ -395,12 +395,14 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
     scaled_std <- p_std * s
     ref_frac <- if (length(pred_row) > 2) pred_row[3] else NA
 
-    ref_interval <- NULL
     if (log_scale) {
       lower <- exp(scaled_mean + qnorm(percentiles[1]) * scaled_std)
       upper <- exp(scaled_mean + qnorm(percentiles[2]) * scaled_std)
-      ref_interval <- c(lower = lower, upper = upper)
+    } else {
+      lower <- scaled_mean + qnorm(percentiles[1]) * scaled_std
+      upper <- scaled_mean + qnorm(percentiles[2]) * scaled_std
     }
+    ref_interval <- c(lower = lower, upper = upper)
 
     list(mean = scaled_mean, std = scaled_std,
          reference_fraction = ref_frac, reference_interval = ref_interval)
@@ -445,11 +447,9 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
         reference_fraction_ci = quantile(boot_ref_fracs, probs = ci_probs, na.rm = TRUE)
       )
 
-      if (log_scale) {
-        boot_ri <- do.call(rbind, lapply(boot_results, `[[`, "reference_interval"))
-        ci_list$reference_interval_lower_ci <- quantile(boot_ri[, "lower"], probs = ci_probs, na.rm = TRUE)
-        ci_list$reference_interval_upper_ci <- quantile(boot_ri[, "upper"], probs = ci_probs, na.rm = TRUE)
-      }
+      boot_ri <- do.call(rbind, lapply(boot_results, `[[`, "reference_interval"))
+      ci_list$reference_interval_lower_ci <- quantile(boot_ri[, "lower"], probs = ci_probs, na.rm = TRUE)
+      ci_list$reference_interval_upper_ci <- quantile(boot_ri[, "upper"], probs = ci_probs, na.rm = TRUE)
 
       result_list$bootstrap_ci <- ci_list
       result_list$n_bootstrap <- n_bootstrap

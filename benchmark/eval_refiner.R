@@ -2,16 +2,15 @@
 # Evaluate refineR predictions using RIbench.
 #
 # Usage:
-#   Rscript benchmark/eval_refiner.R <predictions_dir> [--workdir PATH] [--outdir PATH] [subset]
+#   Rscript benchmark/eval_refiner.R <predictions_dir> [--outdir PATH] [subset]
 #
 # Example:
 #   Rscript benchmark/eval_refiner.R ../rinet_v1/evaluation/ribench/refineR_predictions \
-#     --workdir ../rinet_v1/data/RIbench --outdir benchmark/results_refiner
+#     --outdir benchmark/results_refiner
 #
 # Arguments:
 #   predictions_dir: directory containing refineR CSV prediction files
-#   --workdir PATH:  directory containing Data/ subfolder (default: benchmark/results)
-#   --outdir PATH:   directory for Results/ and Evaluation/ output (default: same as --workdir)
+#   --outdir PATH:   directory for Results/ and Evaluation/ output (default: benchmark/results)
 #   subset:          "all" (default), "test", integer, biomarker name, or distribution type
 
 suppressPackageStartupMessages({
@@ -21,17 +20,15 @@ suppressPackageStartupMessages({
 args <- commandArgs(trailingOnly = TRUE)
 
 # Parse flags
-workdir_pos <- match("--workdir", args)
 outdir_pos  <- match("--outdir", args)
 flag_indices <- c(
-  which(args %in% c("--workdir", "--outdir")),
-  if (!is.na(workdir_pos)) workdir_pos + 1,
+  which(args %in% "--outdir"),
   if (!is.na(outdir_pos)) outdir_pos + 1
 )
 positional_args <- if (length(flag_indices) > 0) args[-flag_indices] else args
 
 if (length(positional_args) < 1) {
-  stop("Usage: Rscript eval_refiner.R <predictions_dir> [--workdir PATH] [--outdir PATH] [subset]")
+  stop("Usage: Rscript eval_refiner.R <predictions_dir> [--outdir PATH] [subset]")
 }
 
 predictions_dir <- normalizePath(positional_args[1], mustWork = TRUE)
@@ -47,14 +44,12 @@ if (subset_arg == "test") {
   }
 }
 
-working_dir <- if (!is.na(workdir_pos)) normalizePath(args[workdir_pos + 1], mustWork = FALSE) else file.path(getwd(), "benchmark", "results")
-output_dir  <- if (!is.na(outdir_pos))  normalizePath(args[outdir_pos + 1], mustWork = FALSE) else working_dir
+output_dir  <- if (!is.na(outdir_pos))  normalizePath(args[outdir_pos + 1], mustWork = FALSE) else file.path(getwd(), "benchmark", "results")
 
 algo_name <- "refineR"
 
 cat("=== RIbench Evaluation for refineR ===\n")
 cat("Predictions dir:", predictions_dir, "\n")
-cat("Working directory:", working_dir, "\n")
 cat("Output directory:", output_dir, "\n")
 cat("Subset:", subset_arg, "\n\n")
 
@@ -99,9 +94,9 @@ for (csv_file in csv_files) {
 cat(sprintf("  Converted %d files.\n\n", n_converted))
 
 # ---------------------------------------------------------------------------
-# Step 2: Generate benchmark test sets if needed
+# Step 2: Load test set definitions
 # ---------------------------------------------------------------------------
-cat("Step 2: Checking benchmark test sets...\n")
+cat("Step 2: Loading test set definitions...\n")
 testsets <- loadTestsetDefinition()
 
 if (is.numeric(subset_val)) {
@@ -114,20 +109,7 @@ if (is.numeric(subset_val)) {
   }
 }
 
-data_dir <- file.path(working_dir, "Data")
-n_existing <- length(list.files(data_dir, pattern = "\\.csv$", recursive = TRUE))
-n_expected <- nrow(testsets)
-
-if (n_existing >= n_expected) {
-  cat(sprintf("  Already exist (%d files), skipping generation.\n\n", n_existing))
-} else {
-  cat(sprintf("  Generating %d test sets...\n", n_expected))
-  generateBiomarkerTestSets(
-    workingDir = working_dir,
-    subset     = subset_val
-  )
-  cat("  Done.\n\n")
-}
+cat(sprintf("  Loaded %d test set definitions.\n\n", nrow(testsets)))
 
 # ---------------------------------------------------------------------------
 # Step 3: Evaluate
