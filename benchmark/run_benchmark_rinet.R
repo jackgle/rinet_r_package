@@ -25,8 +25,7 @@
 #   --no-log-normal (optional): disable log-scaling for analytes with Distribution == "normal"
 #     Can appear anywhere in the argument list.
 #
-#   --workdir PATH (optional): path to working directory containing Data/ subfolder
-#     Defaults to benchmark/results/ in the current working directory.
+#   --workdir PATH (required): path to working directory containing Data/ subfolder
 #
 #   --outdir PATH (optional): path for Results/ and Evaluation/ output
 #     Defaults to the same as --workdir.
@@ -60,9 +59,11 @@ if (subset_arg == "test") {
   }
 }
 
-working_dir <- if (!is.na(workdir_pos)) normalizePath(args[workdir_pos + 1], mustWork = FALSE) else file.path(getwd(), "benchmark", "results")
+if (is.na(workdir_pos)) {
+  stop("--workdir is required. Usage: Rscript benchmark/run_benchmark_rinet.R --workdir PATH [--outdir PATH] [subset] [--outliers] [--no-log-normal]")
+}
+working_dir <- normalizePath(args[workdir_pos + 1], mustWork = TRUE)
 output_dir <- if (!is.na(outdir_pos)) normalizePath(args[outdir_pos + 1], mustWork = FALSE) else working_dir
-dir.create(working_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
 algo_name   <- "RINet"
@@ -92,22 +93,22 @@ if (is.numeric(subset_val)) {
 }
 
 # ---------------------------------------------------------------------------
-# Step 2: Generate benchmark test sets (if needed)
+# Step 2: Check benchmark data
 # ---------------------------------------------------------------------------
 data_dir <- file.path(working_dir, "Data")
 n_existing <- length(list.files(data_dir, pattern = "\\.csv$", recursive = TRUE))
 n_expected <- nrow(testsets)
 
-if (n_existing >= n_expected) {
-  cat(sprintf("Step 1: Benchmark test sets already exist (%d files), skipping generation.\n\n", n_existing))
-} else {
-  cat(sprintf("Step 1: Generating benchmark test sets (%d needed, %d found)...\n", n_expected, n_existing))
-  generateBiomarkerTestSets(workingDir = working_dir, subset = subset_val)
-  cat("Done.\n\n")
+if (n_existing < n_expected) {
+  stop(sprintf(
+    "Expected %d test set CSV files in %s, found %d.\nGenerate them first with RIbench::generateBiomarkerTestSets(workingDir = '%s').",
+    n_expected, data_dir, n_existing, working_dir
+  ))
 }
+cat(sprintf("Step 1: Found %d test set CSV files.\n\n", n_existing))
 
 # ---------------------------------------------------------------------------
-# Step 3: Run RINet on all test sets (in-process, single model load)
+# Step 3: Run RINet
 # ---------------------------------------------------------------------------
 cat("Step 2: Running RINet on benchmark test sets (in-process, single model load)...\n")
 
@@ -160,22 +161,25 @@ for (i in seq_len(nrow(testsets))) {
     data_vec <- data_vec[keep]
   }
 
+  # CRP: use 95th percentile (one-sided upper RI); others: 2.5th and 97.5th
+  pctiles <- if (row$Analyte == "CRP") c(0.05, 0.95) else percentiles
+
   # Predict
   t_iter <- system.time({
     result <- tryCatch({
-      res <- predict_rinet_1d(data_vec, log_scale = use_log_scale, percentiles = percentiles)
+      res <- predict_rinet_1d(data_vec, log_scale = use_log_scale, percentiles = pctiles)
       ri <- res[[1]]$reference_interval
-      data.frame(Percentile = percentiles, PointEst = as.numeric(ri))
+      data.frame(Percentile = pctiles, PointEst = as.numeric(ri))
     }, error = function(e) {
-      data.frame(Percentile = percentiles, PointEst = NA_real_)
+      data.frame(Percentile = pctiles, PointEst = NA_real_)
     })
   })
 
-  # RIbench expects CRP to have only the upper RI (1 row), others get both (2 rows).
-  # For CRP, getRIsAllwithoutModel() does c(0, model$PointEst), so PointEst must be scalar.
+  # RIbench expects CRP to have only the upper RI (1 row).
+  # getRIsAllwithoutModel() does c(0, model$PointEst), so PointEst must be scalar.
   fit <- result
   if (row$Analyte == "CRP") {
-    fit <- data.frame(Percentile = 0.975, PointEst = result$PointEst[2])
+    fit <- data.frame(Percentile = 0.95, PointEst = result$PointEst[2])
     fit$Runtime <- t_iter[3]
   } else {
     fit$Runtime <- c(t_iter[3], NA)

@@ -73,8 +73,8 @@ for (csv_file in csv_files) {
 
   if (analyte == "CRP") {
     fit <- data.frame(
-      Percentile = 0.975,
-      PointEst   = df$PointEst[df$Percentile == 0.975]
+      Percentile = 0.95,
+      PointEst   = df$PointEst[df$Percentile == 0.95]
     )
   } else {
     fit <- data.frame(
