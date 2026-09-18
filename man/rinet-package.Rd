@@ -32,6 +32,6 @@
 \author{
   Jack
   
-  Maintainer: Jack <your.email@example.com>
+  Maintainer: Jack LeBien <jlebien@abartyshealth.com>
 }
 \keyword{package}
