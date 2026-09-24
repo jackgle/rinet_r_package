@@ -1,99 +1,69 @@
 #' @importFrom stats sd qnorm qchisq quantile
+#' @importFrom graphics hist
 NULL
 
 # Internal environment to cache loaded models
 .models <- new.env(parent = emptyenv())
 
-# Internal helper to silence TensorFlow/keras chatter (stdout/stderr/messages)
-.silence_tf <- function(expr) {
-  # R-level silencing
-  tf_log <- file(tempfile(), open = "w")
-  on.exit({
-    sink(NULL, type = "message")
-    sink(NULL, type = "output")
-    close(tf_log)
-  }, add = TRUE)
-  sink(tf_log, type = "message")
-  sink(tf_log, type = "output")
-  
-  # C-level silencing via Python if available
-  if (reticulate::py_available()) {
-    tryCatch({
-      reticulate::py_run_string("import os; _orig_stderr = os.dup(2); _devnull = os.open(os.devnull, os.O_WRONLY); os.dup2(_devnull, 2)")
-      on.exit({
-        reticulate::py_run_string("os.dup2(_orig_stderr, 2); os.close(_orig_stderr); os.close(_devnull)")
-      }, add = TRUE)
-    }, error = function(e) {})
-  }
-
-  withCallingHandlers(expr,
-    warning = function(w) invokeRestart("muffleWarning"),
-    message = function(m) invokeRestart("muffleMessage")
+# RobustScaler parameters exported from the scikit-learn scalers used during
+# training. Inverse transform is x * scale + center.
+.scaler_params <- list(
+  `1` = list(
+    center = c(0.0002047170471470941, 0.5857798250435453, 0.7463246324632463),
+    scale  = c(0.3005987030854761, 0.22441810400917267, 0.19519641289267498)
+  ),
+  `2` = list(
+    center = c(-0.002805449917321084, -0.0017991409067919127, 0.671630399121245,
+               0.6709800895332179, 0.005727785563162169, 0.7417417417417418),
+    scale  = c(0.1922681733638529, 0.19147688428607332, 0.19244703060204937,
+               0.1943684586844019, 0.806204029253837, 0.19475599152659384)
   )
-}
+)
 
-#' Internal function to load model and scaler
+#' Internal function to load the TorchScript model
 #' @keywords internal
 .load_model <- function(ndim) {
   model_key <- paste0("model_", ndim, "d")
-  
+
   if (is.null(.models[[model_key]])) {
-    # Ensure TensorFlow is initialized
-    if (!reticulate::py_module_available("tensorflow")) {
-      stop("TensorFlow is not available. Please install TensorFlow:\n",
-           "  library(keras)\n",
-           "  install_keras()")
-    }
-    helpers <- tryCatch(get(".py_silence", envir = parent.env(environment()), inherits = TRUE), error = function(e) NULL)
-    
-    model_file <- paste0("rinet_", ndim, "d.keras")
+    model_file <- paste0("rinet_", ndim, "d.pt")
     model_path <- system.file("models", model_file, package = "rinet")
-    
+
     if (!file.exists(model_path)) {
-      stop("Model file not found: ", model_path, 
+      stop("Model file not found: ", model_path,
            "\nMake sure ", model_file, " is in inst/models/")
     }
-    
-    message("Loading ", ndim, "D model (this may take a moment on first use)...")
-    keras <- reticulate::import("keras")
-    .models[[model_key]] <- keras$models$load_model(model_path)
-    message("Model loaded.")
+
+    model <- tryCatch(
+      torch::jit_load(model_path),
+      error = function(e) {
+        stop("Could not load the RINet model. If this is a fresh install, ",
+             "complete the one-time setup with:\n",
+             "  torch::install_torch()\n\n",
+             "Original error: ", conditionMessage(e), call. = FALSE)
+      }
+    )
+    .models[[model_key]] <- model
   }
-  
+
   return(.models[[model_key]])
 }
 
-#' Internal function to load scaler
+#' Internal function to invert the training-time output scaling
 #' @keywords internal
-.load_scaler <- function(ndim) {
-  scaler_key <- paste0("scaler_", ndim, "d")
-  
-  if (is.null(.models[[scaler_key]])) {
-    scaler_file <- paste0("scaler_", ndim, "d.pkl")
-    scaler_path <- system.file("models", scaler_file, package = "rinet")
-    
-    if (!file.exists(scaler_path)) {
-      stop("Scaler file not found: ", scaler_path,
-           "\nMake sure ", scaler_file, " is in inst/models/")
-    }
-    
-    .silence_tf({
-      reticulate::py_run_string("import pickle")
-      .models[[scaler_key]] <- reticulate::py_run_string(
-        sprintf("scaler = pickle.load(open('%s', 'rb'))", scaler_path)
-      )$scaler
-    })
-  }
-  
-  return(.models[[scaler_key]])
+.inverse_transform <- function(predictions, ndim) {
+  p <- .scaler_params[[as.character(ndim)]]
+  sweep(sweep(predictions, 2, p$scale, "*"), 2, p$center, "+")
 }
 
 #' Extract histogram features from standardized data
 #' @keywords internal
-.extract_features <- function(data, ndim, feature_grid_range = c(-4, 4), 
+.extract_features <- function(data, ndim, feature_grid_range = c(-4, 4),
                               feature_grid_nbins = 100) {
   data <- as.matrix(data)
-  
+  breaks <- seq(feature_grid_range[1], feature_grid_range[2],
+                length.out = feature_grid_nbins + 1)
+
   if (ndim == 1) {
     # Check for standardization (using population SD to match Python)
     n <- length(data)
@@ -101,15 +71,12 @@ NULL
     if (abs(mean(data)) > 0.01 || abs(pop_sd - 1) > 0.01) {
       stop("Data must be standardized (mean=0, sd=1)")
     }
-    
-    # Create histogram using numpy for consistency with Python/2D
-    breaks <- seq(feature_grid_range[1], feature_grid_range[2], 
-                  length.out = feature_grid_nbins + 1)
-    np <- reticulate::import("numpy", convert = FALSE)
-    hist_result <- np$histogram(data, bins = breaks, density = TRUE)
-    # Use [[0]] to get the first element (counts) from the Python tuple
-    features <- as.numeric(reticulate::py_to_r(hist_result[[0]]))
-    
+
+    # density-normalized histogram counts, matching numpy's histogram(..., density=TRUE)
+    counts <- graphics::hist(data, breaks = breaks, plot = FALSE)$counts
+    bin_width <- diff(breaks)
+    features <- counts / (sum(counts) * bin_width)
+
   } else if (ndim == 2) {
     # Check for standardization (using population SD to match Python)
     n <- nrow(data)
@@ -117,25 +84,22 @@ NULL
     if (any(abs(colMeans(data)) > 0.01) || any(abs(pop_sd - 1) > 0.01)) {
       stop("Data must be standardized (mean=0, sd=1 for each dimension)")
     }
-    
-    # Create 2D histogram
-    breaks <- seq(feature_grid_range[1], feature_grid_range[2], 
-                  length.out = feature_grid_nbins + 1)
-    
-    # Use reticulate to call numpy's histogram2d for consistency
-    np <- reticulate::import("numpy", convert = FALSE)
-    hist_result <- np$histogram2d(
-      data[, 1], data[, 2],
-      bins = breaks,
-      density = TRUE
-    )
-    # Use [[0]] to get the first element (H) from the Python tuple
-    features <- as.matrix(reticulate::py_to_r(hist_result[[0]]))
+
+    # 2D histogram, matching numpy's histogram2d(..., density=TRUE)
+    ix <- findInterval(data[, 1], breaks, rightmost.closed = TRUE)
+    iy <- findInterval(data[, 2], breaks, rightmost.closed = TRUE)
+    nbins <- feature_grid_nbins
+    keep <- ix >= 1 & ix <= nbins & iy >= 1 & iy <= nbins
+    counts <- matrix(0, nrow = nbins, ncol = nbins)
+    tab <- table(factor(ix[keep], levels = 1:nbins), factor(iy[keep], levels = 1:nbins))
+    counts[] <- as.matrix(tab)
+    bin_area <- (diff(feature_grid_range) / nbins)^2
+    features <- counts / (sum(counts) * bin_area)
   }
-  
+
   # Normalize to [0, 1]
   features <- (features - min(features)) / (max(features) - min(features))
-  
+
   return(features)
 }
 
@@ -300,10 +264,8 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
     })
   }
 
-  # Load model and scaler
+  # Load model
   model <- .load_model(1)
-  scaler <- .load_scaler(1)
-  np <- reticulate::import("numpy", convert = FALSE)
 
   # Helper function to compute population SD
   pop_sd <- function(x) {
@@ -367,25 +329,16 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
     all_stds <- stds
   }
 
-  # Stack and add channel dimension for batch prediction
-  features_array <- np$stack(all_features, axis = 0L)
-  features_array <- np$expand_dims(features_array, axis = -1L)
+  # Stack into (N, 1, L) for the model (channels-first)
+  features_mat <- do.call(rbind, all_features)
+  features_array <- torch::torch_tensor(features_mat, dtype = torch::torch_float32())$unsqueeze(2)
 
   # Predict (single batch call for all samples + bootstraps)
-  predictions <- NULL
-  helpers <- tryCatch(get(".py_silence", envir = parent.env(environment()), inherits = TRUE), error = function(e) NULL)
-  if (!is.null(helpers) && !is.null(helpers$predict_silent)) {
-    predictions <- tryCatch(
-      helpers$predict_silent(model, features_array, verbose = verbose),
-      error = function(e) NULL
-    )
-  }
-  if (is.null(predictions)) {
-    predictions <- .silence_tf(model$predict(features_array, verbose = verbose))
-  }
+  predictions <- torch::with_no_grad(model(features_array))
+  predictions <- as.matrix(predictions)
 
-  # Inverse transform using scaler
-  predictions <- reticulate::py_to_r(scaler$inverse_transform(predictions))
+  # Inverse transform using scaler parameters
+  predictions <- .inverse_transform(predictions, 1)
 
   # Helper to compute scaled results from raw predictions
   compute_result <- function(pred_row, m, s) {
@@ -536,10 +489,8 @@ predict_rinet_2d <- function(data, feature_grid_range = c(-4, 4),
     stop("All samples must have 2 columns for 2D prediction")
   }
 
-  # Load model and scaler
+  # Load model
   model <- .load_model(2)
-  scaler <- .load_scaler(2)
-  np <- reticulate::import("numpy", convert = FALSE)
 
   # Helper function to compute population SD
  pop_sd_vec <- function(x) {
@@ -606,25 +557,18 @@ predict_rinet_2d <- function(data, feature_grid_range = c(-4, 4),
     all_stds <- stds
   }
 
-  # Stack and add channel dimension for batch prediction
-  features_array <- np$stack(all_features, axis = 0L)
-  features_array <- np$expand_dims(features_array, axis = -1L)
+  # Stack into (N, 1, H, W) for the model (channels-first)
+  features_array <- torch::torch_stack(
+    lapply(all_features, function(f) torch::torch_tensor(f, dtype = torch::torch_float32())),
+    dim = 1
+  )$unsqueeze(2)
 
   # Predict (single batch call for all samples + bootstraps)
-  predictions <- NULL
-  helpers <- tryCatch(get(".py_silence", envir = parent.env(environment()), inherits = TRUE), error = function(e) NULL)
-  if (!is.null(helpers) && !is.null(helpers$predict_silent)) {
-    predictions <- tryCatch(
-      helpers$predict_silent(model, features_array, verbose = verbose),
-      error = function(e) NULL
-    )
-  }
-  if (is.null(predictions)) {
-    predictions <- .silence_tf(model$predict(features_array, verbose = verbose))
-  }
+  predictions <- torch::with_no_grad(model(features_array))
+  predictions <- as.matrix(predictions)
 
-  # Inverse transform using scaler
-  predictions <- reticulate::py_to_r(scaler$inverse_transform(predictions))
+  # Inverse transform using scaler parameters
+  predictions <- .inverse_transform(predictions, 2)
 
   # Helper to compute scaled results from raw predictions
   compute_result <- function(pred_row, m, s) {

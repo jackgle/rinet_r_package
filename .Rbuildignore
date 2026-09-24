@@ -5,3 +5,5 @@
 ^\.gitignore$
 ^README\.md$
 ^LICENSE\.md$
+^\.claude$
+^benchmark$

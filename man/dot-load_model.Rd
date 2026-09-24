@@ -2,11 +2,11 @@
 % Please edit documentation in R/model_functions.R
 \name{.load_model}
 \alias{.load_model}
-\title{Internal function to load model and scaler}
+\title{Internal function to load the TorchScript model}
 \usage{
 .load_model(ndim)
 }
 \description{
-Internal function to load model and scaler
+Internal function to load the TorchScript model
 }
 \keyword{internal}

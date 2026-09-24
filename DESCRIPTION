@@ -10,6 +10,7 @@ LazyData: true
 Depends:
     R (>= 3.5.0)
 Imports:
-    reticulate
-SystemRequirements: Python (>= 3.8), TensorFlow (>= 2.16), Keras (>= 3.0), scikit-learn
+    torch,
+    stats,
+    graphics
 RoxygenNote: 7.3.3
