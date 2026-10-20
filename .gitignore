@@ -22,6 +22,5 @@ venv/
 Thumbs.db
 
 .claude/
-# Local analysis and model staging (not part of the package)
-benchmark/
+# Local model staging (not part of the package)
 inst/models/tmp/

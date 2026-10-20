@@ -6,7 +6,6 @@
 ^README\.md$
 ^LICENSE\.md$
 ^\.claude$
-^benchmark$
 ^data-raw$
 ^cran-comments\.md$
 ^inst/models/tmp$
