@@ -159,7 +159,7 @@ rinet includes two 1D models:
 
 | Version | Description |
 |---------|-------------|
-| `"v2.1"` (default) | Retrained on revised simulations in which pathological component shifts and widths are drawn relative to the reference component, with a five times larger training set. |
+| `"v2.1"` (default) | Retrained on revised simulations (pathological components drawn relative to the reference, larger training set). |
 | `"v2.0"` | The model described in the published paper. |
 
 ```r
@@ -167,9 +167,7 @@ predict_rinet(alb_mixture)                         # v2.1 (default)
 predict_rinet(alb_mixture, model_version = "v2.0") # published model
 ```
 
-Each prediction records the `model_version` that produced it. The 2D model is v2.0.
-
-Compared with v2.0, v2.1 improves the overall [RIbench](https://CRAN.R-project.org/package=RIbench) benchmark score from 0.395 to 0.356 (lower is better), with the largest gains when a large fraction of the data is pathological, and some loss at low pathological fractions for skewed analytes. On a real liver function test dataset the two versions perform similarly. See [NEWS.md](NEWS.md) for details. The simulation and training code behind the v2.1 update is available in the [RINet repository](https://github.com/jackgle/RINet).
+v2.1 was trained on simulations that cover pathological components more evenly and over a wider range than v2.0's, which improves estimates on mixtures that were rare in v2.0's training data. It performs comparably to v2.0 on the real-world liver dataset used in the paper, and improves on v2.0 on the [RIbench](https://CRAN.R-project.org/package=RIbench) simulated benchmark. Each prediction records the `model_version` used; the 2D model is v2.0. See [NEWS.md](NEWS.md) for evaluation details and the [RINet repository](https://github.com/jackgle/RINet) for the simulation and training code.
 
 ## Citation
 
