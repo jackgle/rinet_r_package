@@ -50,6 +50,7 @@ A list of predictions. Each element contains:
   \item{reference_fraction}{Predicted reference component fraction}
   \item{reference_interval}{Reference region ellipse vertices (100x2 matrix) in original scale (if log_scale=TRUE)}
   \item{log_scale}{Logical indicating whether log-scaling was used}
+  \item{model_version}{Version of the model that produced the prediction (always "v2.0" for 2D)}
   \item{bootstrap_ci}{List of bootstrap confidence intervals (if n_bootstrap > 0):
     mean_ci (2x2 matrix), std_ci (2x2 matrix), correlation_ci, reference_fraction_ci}
 }

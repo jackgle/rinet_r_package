@@ -4,7 +4,7 @@
 \alias{.inverse_transform}
 \title{Internal function to invert the training-time output scaling}
 \usage{
-.inverse_transform(predictions, ndim)
+.inverse_transform(predictions, ndim, version)
 }
 \description{
 Internal function to invert the training-time output scaling

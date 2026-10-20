@@ -5,13 +5,18 @@ NULL
 .models <- new.env(parent = emptyenv())
 
 # RobustScaler parameters exported from the scikit-learn scalers used during
-# training. Inverse transform is x * scale + center.
+# training (see data-raw/convert_keras_to_torchscript.py). Inverse transform
+# is x * scale + center. Keyed by "<ndim>d_<model version>".
 .scaler_params <- list(
-  `1` = list(
+  `1d_v2.0` = list(
     center = c(0.0002047170471470941, 0.5857798250435453, 0.7463246324632463),
     scale  = c(0.3005987030854761, 0.22441810400917267, 0.19519641289267498)
   ),
-  `2` = list(
+  `1d_v2.1` = list(
+    center = c(-0.0019110005908701852, 0.45092418458886824, 0.7404809619238477),
+    scale  = c(0.4277205806273689, 0.25229529693014174, 0.19751203308250287)
+  ),
+  `2d_v2.0` = list(
     center = c(-0.002805449917321084, -0.0017991409067919127, 0.671630399121245,
                0.6709800895332179, 0.005727785563162169, 0.7417417417417418),
     scale  = c(0.1922681733638529, 0.19147688428607332, 0.19244703060204937,
@@ -21,11 +26,11 @@ NULL
 
 #' Internal function to load the TorchScript model
 #' @keywords internal
-.load_model <- function(ndim) {
-  model_key <- paste0("model_", ndim, "d")
+.load_model <- function(ndim, version) {
+  model_key <- paste0(ndim, "d_", version)
 
   if (is.null(.models[[model_key]])) {
-    model_file <- paste0("rinet_", ndim, "d.pt")
+    model_file <- paste0("rinet_", model_key, ".pt")
     model_path <- system.file("models", model_file, package = "rinet")
 
     if (!file.exists(model_path)) {
@@ -50,8 +55,8 @@ NULL
 
 #' Internal function to invert the training-time output scaling
 #' @keywords internal
-.inverse_transform <- function(predictions, ndim) {
-  p <- .scaler_params[[as.character(ndim)]]
+.inverse_transform <- function(predictions, ndim, version) {
+  p <- .scaler_params[[paste0(ndim, "d_", version)]]
   sweep(sweep(predictions, 2, p$scale, "*"), 2, p$center, "+")
 }
 
@@ -137,6 +142,10 @@ NULL
 #'   intervals are computed for all predicted statistics using batch inference.
 #' @param confidence_level Numeric specifying the confidence level for bootstrap
 #'   intervals. Default is 0.95.
+#' @param model_version Version of the 1D model: \code{"v2.1"} (default) or
+#'   \code{"v2.0"}, the model described in the published paper. Only applies to
+#'   1D data; 2D predictions always use the v2.0 model. See the package NEWS for
+#'   the differences between versions.
 #' @return A list of predictions. Each element contains:
 #'   \item{mean}{Predicted mean(s) (log-scale if log_scale=TRUE)}
 #'   \item{std}{Predicted standard deviation(s) (log-scale if log_scale=TRUE)}
@@ -145,6 +154,7 @@ NULL
 #'   \item{reference_fraction}{Predicted reference component fraction}
 #'   \item{reference_interval}{Reference interval in original scale (if log_scale=TRUE)}
 #'   \item{log_scale}{Logical indicating whether log-scaling was used}
+#'   \item{model_version}{Version of the model that produced the prediction}
 #'   \item{bootstrap_ci}{List of bootstrap confidence intervals (if n_bootstrap > 0)}
 #' @export
 #' @examples
@@ -161,11 +171,17 @@ NULL
 #'   samples <- list(exp(rnorm(1000, mean = 2, sd = 0.5)),
 #'                   exp(rnorm(1000, mean = 2, sd = 0.5)))
 #'   results <- predict_rinet(samples)
+#'
+#'   # Reproduce the published paper's 1D model
+#'   result <- predict_rinet(sample_1d, model_version = "v2.0")
 #' }
 predict_rinet <- function(data, feature_grid_range = c(-4, 4),
                           feature_grid_nbins = 100, verbose = 0,
                           log_scale = TRUE, percentiles = c(0.025, 0.975),
-                          n_bootstrap = 0, confidence_level = 0.95) {
+                          n_bootstrap = 0, confidence_level = 0.95,
+                          model_version = c("v2.1", "v2.0")) {
+  model_version <- match.arg(model_version)
+
   # Determine dimensionality from first sample
   if (is.list(data) && !is.data.frame(data)) {
     sample <- data[[1]]
@@ -193,7 +209,8 @@ predict_rinet <- function(data, feature_grid_range = c(-4, 4),
   # Call appropriate function
   if (ndim == 1) {
     return(predict_rinet_1d(data, feature_grid_range, feature_grid_nbins, verbose,
-                           log_scale, percentiles, n_bootstrap, confidence_level))
+                           log_scale, percentiles, n_bootstrap, confidence_level,
+                           model_version))
   } else {
     return(predict_rinet_2d(data, feature_grid_range, feature_grid_nbins, verbose,
                            log_scale, percentiles, n_bootstrap, confidence_level))
@@ -223,6 +240,9 @@ predict_rinet <- function(data, feature_grid_range = c(-4, 4),
 #'   intervals are computed for all predicted statistics.
 #' @param confidence_level Numeric specifying the confidence level for bootstrap
 #'   intervals. Default is 0.95.
+#' @param model_version Version of the 1D model: \code{"v2.1"} (default) or
+#'   \code{"v2.0"}, the model described in the published paper. See the package
+#'   NEWS for the differences between versions.
 #' @return A list of predictions. Each element contains:
 #'   \item{mean}{Predicted mean (scalar, log-scale if log_scale=TRUE)}
 #'   \item{std}{Predicted standard deviation (scalar, log-scale if log_scale=TRUE)}
@@ -231,6 +251,7 @@ predict_rinet <- function(data, feature_grid_range = c(-4, 4),
 #'   \item{reference_fraction}{Predicted reference component fraction}
 #'   \item{reference_interval}{Reference interval in original scale (if log_scale=TRUE)}
 #'   \item{log_scale}{Logical indicating whether log-scaling was used}
+#'   \item{model_version}{Version of the model that produced the prediction}
 #'   \item{bootstrap_ci}{List of bootstrap confidence intervals (if n_bootstrap > 0):
 #'     mean_ci, std_ci, reference_fraction_ci, reference_interval_lower_ci,
 #'     reference_interval_upper_ci}
@@ -249,7 +270,10 @@ predict_rinet <- function(data, feature_grid_range = c(-4, 4),
 predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
                              feature_grid_nbins = 100, verbose = 0,
                              log_scale = TRUE, percentiles = c(0.025, 0.975),
-                             n_bootstrap = 0, confidence_level = 0.95) {
+                             n_bootstrap = 0, confidence_level = 0.95,
+                             model_version = c("v2.1", "v2.0")) {
+  model_version <- match.arg(model_version)
+
   # Convert to list if single sample
   if (!is.list(data) || is.data.frame(data)) {
     data <- list(as.vector(as.matrix(data)))
@@ -267,7 +291,7 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
   }
 
   # Load model
-  model <- .load_model(1)
+  model <- .load_model(1, model_version)
 
   # Helper function to compute population SD
   pop_sd <- function(x) {
@@ -340,7 +364,7 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
   predictions <- as.matrix(predictions)
 
   # Inverse transform using scaler parameters
-  predictions <- .inverse_transform(predictions, 1)
+  predictions <- .inverse_transform(predictions, 1, model_version)
 
   # Helper to compute scaled results from raw predictions
   compute_result <- function(pred_row, m, s) {
@@ -379,7 +403,8 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
       correlation = NA,
       reference_fraction = res$reference_fraction,
       reference_interval = res$reference_interval,
-      log_scale = log_scale
+      log_scale = log_scale,
+      model_version = model_version
     )
 
     # Add bootstrap CIs if requested
@@ -447,6 +472,7 @@ predict_rinet_1d <- function(data, feature_grid_range = c(-4, 4),
 #'   \item{reference_fraction}{Predicted reference component fraction}
 #'   \item{reference_interval}{Reference region ellipse vertices (100x2 matrix) in original scale (if log_scale=TRUE)}
 #'   \item{log_scale}{Logical indicating whether log-scaling was used}
+#'   \item{model_version}{Version of the model that produced the prediction (always "v2.0" for 2D)}
 #'   \item{bootstrap_ci}{List of bootstrap confidence intervals (if n_bootstrap > 0):
 #'     mean_ci (2x2 matrix), std_ci (2x2 matrix), correlation_ci, reference_fraction_ci}
 #' @export
@@ -491,8 +517,9 @@ predict_rinet_2d <- function(data, feature_grid_range = c(-4, 4),
     stop("All samples must have 2 columns for 2D prediction")
   }
 
-  # Load model
-  model <- .load_model(2)
+  # Load model (only one 2D model version exists)
+  model_version <- "v2.0"
+  model <- .load_model(2, model_version)
 
   # Helper function to compute population SD
  pop_sd_vec <- function(x) {
@@ -570,7 +597,7 @@ predict_rinet_2d <- function(data, feature_grid_range = c(-4, 4),
   predictions <- as.matrix(predictions)
 
   # Inverse transform using scaler parameters
-  predictions <- .inverse_transform(predictions, 2)
+  predictions <- .inverse_transform(predictions, 2, model_version)
 
   # Helper to compute scaled results from raw predictions
   compute_result <- function(pred_row, m, s) {
@@ -624,7 +651,8 @@ predict_rinet_2d <- function(data, feature_grid_range = c(-4, 4),
       correlation = res$correlation,
       reference_fraction = res$reference_fraction,
       reference_interval = res$reference_interval,
-      log_scale = log_scale
+      log_scale = log_scale,
+      model_version = model_version
     )
 
     # Add bootstrap CIs if requested

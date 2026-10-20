@@ -12,7 +12,8 @@ predict_rinet_1d(
   log_scale = TRUE,
   percentiles = c(0.025, 0.975),
   n_bootstrap = 0,
-  confidence_level = 0.95
+  confidence_level = 0.95,
+  model_version = c("v2.1", "v2.0")
 )
 }
 \arguments{
@@ -40,6 +41,10 @@ intervals are computed for all predicted statistics.}
 
 \item{confidence_level}{Numeric specifying the confidence level for bootstrap
 intervals. Default is 0.95.}
+
+\item{model_version}{Version of the 1D model: \code{"v2.1"} (default) or
+\code{"v2.0"}, the model described in the published paper. See the package
+NEWS for the differences between versions.}
 }
 \value{
 A list of predictions. Each element contains:
@@ -50,6 +55,7 @@ A list of predictions. Each element contains:
   \item{reference_fraction}{Predicted reference component fraction}
   \item{reference_interval}{Reference interval in original scale (if log_scale=TRUE)}
   \item{log_scale}{Logical indicating whether log-scaling was used}
+  \item{model_version}{Version of the model that produced the prediction}
   \item{bootstrap_ci}{List of bootstrap confidence intervals (if n_bootstrap > 0):
     mean_ci, std_ci, reference_fraction_ci, reference_interval_lower_ci,
     reference_interval_upper_ci}

@@ -12,7 +12,8 @@ predict_rinet(
   log_scale = TRUE,
   percentiles = c(0.025, 0.975),
   n_bootstrap = 0,
-  confidence_level = 0.95
+  confidence_level = 0.95,
+  model_version = c("v2.1", "v2.0")
 )
 }
 \arguments{
@@ -40,6 +41,11 @@ intervals are computed for all predicted statistics using batch inference.}
 
 \item{confidence_level}{Numeric specifying the confidence level for bootstrap
 intervals. Default is 0.95.}
+
+\item{model_version}{Version of the 1D model: \code{"v2.1"} (default) or
+\code{"v2.0"}, the model described in the published paper. Only applies to
+1D data; 2D predictions always use the v2.0 model. See the package NEWS for
+the differences between versions.}
 }
 \value{
 A list of predictions. Each element contains:
@@ -50,6 +56,7 @@ A list of predictions. Each element contains:
   \item{reference_fraction}{Predicted reference component fraction}
   \item{reference_interval}{Reference interval in original scale (if log_scale=TRUE)}
   \item{log_scale}{Logical indicating whether log-scaling was used}
+  \item{model_version}{Version of the model that produced the prediction}
   \item{bootstrap_ci}{List of bootstrap confidence intervals (if n_bootstrap > 0)}
 }
 \description{
@@ -72,5 +79,8 @@ mixture of healthy and pathological measurements.
   samples <- list(exp(rnorm(1000, mean = 2, sd = 0.5)),
                   exp(rnorm(1000, mean = 2, sd = 0.5)))
   results <- predict_rinet(samples)
+
+  # Reproduce the published paper's 1D model
+  result <- predict_rinet(sample_1d, model_version = "v2.0")
 }
 }
