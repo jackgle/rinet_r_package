@@ -23,20 +23,13 @@ install.packages("remotes")
 remotes::install_github("jackgle/rinet_r_package")
 ```
 
-### Step 2: Install Python dependencies (required)
+### Step 2: One-time backend setup
 
-This package requires Python with TensorFlow, Keras, and scikit-learn. Install them once:
+RINet runs its models with the [torch](https://torch.mlverse.org/) R package. No Python installation is needed. After installing rinet, download the torch backend once:
 
 ```r
-# Install reticulate
-install.packages("reticulate")
-
-# Install Python dependencies
-library(reticulate)
-py_install(c("tensorflow", "keras", "scikit-learn"))
+torch::install_torch()
 ```
-
-After this setup, restart R and you're ready to use rinet.
 
 ## Overview
 
@@ -160,28 +153,27 @@ cat(sprintf("  Reference Region: %d ellipse vertices (original scale)\n",
 
 Models are automatically loaded on first use and cached for efficiency.
 
-## Package Structure
+## Model versions
 
+rinet includes two 1D models:
+
+| Version | Description |
+|---------|-------------|
+| `"v2.1"` (default) | Retrained on revised simulations in which pathological component shifts and widths are drawn relative to the reference component, with a five times larger training set. |
+| `"v2.0"` | The model described in the published paper. |
+
+```r
+predict_rinet(alb_mixture)                         # v2.1 (default)
+predict_rinet(alb_mixture, model_version = "v2.0") # published model
 ```
-rinet/
-├── DESCRIPTION
-├── NAMESPACE
-├── LICENSE
-├── R/
-│   └── model_functions.R
-├── man/
-│   └── rinet-package.Rd
-└── inst/
-    └── models/
-        ├── rinet_1d.keras     # 1D CNN model
-        ├── rinet_2d.keras     # 2D CNN model
-        ├── scaler_1d.pkl      # 1D scaler
-        └── scaler_2d.pkl      # 2D scaler
-```
+
+Each prediction records the `model_version` that produced it. The 2D model is v2.0.
+
+Compared with v2.0, v2.1 improves the overall [RIbench](https://CRAN.R-project.org/package=RIbench) benchmark score from 0.395 to 0.356 (lower is better), with the largest gains when a large fraction of the data is pathological, and some loss at low pathological fractions for skewed analytes. On a real liver function test dataset the two versions perform similarly. See [NEWS.md](NEWS.md) for details.
 
 ## Citation
 
-If you use this code in academic work, please cite the associated paper:
+If you use this code in academic work, please cite the associated paper (which describes the v2.0 model):
 
 LeBien, J., Velev, J., & Roche-Lima, A. (2026). RINet: synthetic data training for indirect estimation of clinical reference distributions. Journal of biomedical informatics, 104980. https://doi.org/10.1016/j.jbi.2026.104980
 
