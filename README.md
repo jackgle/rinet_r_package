@@ -169,7 +169,7 @@ predict_rinet(alb_mixture, model_version = "v2.0") # published model
 
 Each prediction records the `model_version` that produced it. The 2D model is v2.0.
 
-Compared with v2.0, v2.1 improves the overall [RIbench](https://CRAN.R-project.org/package=RIbench) benchmark score from 0.395 to 0.356 (lower is better), with the largest gains when a large fraction of the data is pathological, and some loss at low pathological fractions for skewed analytes. On a real liver function test dataset the two versions perform similarly. See [NEWS.md](NEWS.md) for details.
+Compared with v2.0, v2.1 improves the overall [RIbench](https://CRAN.R-project.org/package=RIbench) benchmark score from 0.395 to 0.356 (lower is better), with the largest gains when a large fraction of the data is pathological, and some loss at low pathological fractions for skewed analytes. On a real liver function test dataset the two versions perform similarly. See [NEWS.md](NEWS.md) for details. The simulation and training code behind the v2.1 update is available in the [RINet repository](https://github.com/jackgle/RINet).
 
 ## Citation
 

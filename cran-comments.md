@@ -27,7 +27,7 @@ torch::install_torch() and which is not available on CRAN check machines.
 
 * local macOS (aarch64), R 4.6.1
 * win-builder (R-release, 4.6.1 ucrt)
-* win-builder (R-devel): TODO
+* win-builder (R-devel, 2026-10-18 r90707 ucrt)
 
 ## R CMD check results
 

@@ -20,6 +20,8 @@
   `model_version = "v2.0"` in `predict_rinet()` and `predict_rinet_1d()`.
 * Each prediction now includes a `model_version` element.
 * The 2D model is unchanged (v2.0).
+* The updated simulation and training code is available at
+  <https://github.com/jackgle/RINet>.
 
 ### Evaluation of v2.1 against v2.0
 
