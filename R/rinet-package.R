@@ -1,3 +1,7 @@
+#' @section Setup:
+#' The models run on the torch backend, which is downloaded separately from
+#' the package. Run \code{torch::install_torch()} once after installing rinet.
+#'
 #' @section Model versions:
 #' Two 1D models are included. \code{"v2.1"} (the default) was retrained on
 #' revised simulations with pathological shifts and widths drawn relative to

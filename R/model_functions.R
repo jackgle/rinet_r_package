@@ -125,6 +125,10 @@ NULL
 #' It estimates the statistics of a "healthy" reference population from a
 #' mixture of healthy and pathological measurements.
 #'
+#' @section Setup:
+#' The models run on the torch backend, which is downloaded separately from
+#' the package. Run \code{torch::install_torch()} once after installing rinet.
+#'
 #' @param data A numeric vector, matrix, or list. For 1D: vector or matrix with
 #'   1 column. For 2D: matrix with 2 columns. Can also be a list of such objects.
 #' @param feature_grid_range Numeric vector of length 2 specifying the range

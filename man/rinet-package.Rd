@@ -8,6 +8,12 @@
 \description{
 Predicts statistics of a reference distribution from a mixture of raw clinical measurements (healthy and pathological). Uses pretrained CNN models to estimate the mean, standard deviation, and reference fraction from 1D or 2D sample data. Methods are described in LeBien, Velev, and Roche-Lima (2026) "RINet: synthetic data training for indirect estimation of clinical reference distributions" \doi{10.1016/j.jbi.2026.104980}.
 }
+\section{Setup}{
+
+The models run on the torch backend, which is downloaded separately from
+the package. Run \code{torch::install_torch()} once after installing rinet.
+}
+
 \section{Model versions}{
 
 Two 1D models are included. \code{"v2.1"} (the default) was retrained on
@@ -18,6 +24,14 @@ published paper. Select one with the \code{model_version} argument of
 is v2.0. See \code{news(package = "rinet")} for evaluation details.
 }
 
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/jackgle/rinet_r_package}
+  \item Report bugs at \url{https://github.com/jackgle/rinet_r_package/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Jack LeBien \email{jlebien@abartyshealth.com}
 

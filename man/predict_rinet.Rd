@@ -65,6 +65,12 @@ appropriate prediction function. This is the main user-facing function.
 It estimates the statistics of a "healthy" reference population from a
 mixture of healthy and pathological measurements.
 }
+\section{Setup}{
+
+The models run on the torch backend, which is downloaded separately from
+the package. Run \code{torch::install_torch()} once after installing rinet.
+}
+
 \examples{
 \dontrun{
   # 1D sample (using positive data for log-scale)
