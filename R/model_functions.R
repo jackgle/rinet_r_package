@@ -1,5 +1,4 @@
 #' @importFrom stats sd qnorm qchisq quantile
-#' @importFrom graphics hist
 NULL
 
 # Internal environment to cache loaded models
@@ -72,8 +71,11 @@ NULL
       stop("Data must be standardized (mean=0, sd=1)")
     }
 
-    # density-normalized histogram counts, matching numpy's histogram(..., density=TRUE)
-    counts <- graphics::hist(data, breaks = breaks, plot = FALSE)$counts
+    # density-normalized histogram counts, matching numpy's histogram(..., density=TRUE);
+    # values outside the grid are dropped (hist() would error on them)
+    nbins <- feature_grid_nbins
+    ix <- findInterval(data, breaks, rightmost.closed = TRUE)
+    counts <- tabulate(ix[ix >= 1 & ix <= nbins], nbins = nbins)
     bin_width <- diff(breaks)
     features <- counts / (sum(counts) * bin_width)
 

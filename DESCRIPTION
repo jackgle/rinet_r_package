@@ -11,6 +11,5 @@ Depends:
     R (>= 3.5.0)
 Imports:
     torch,
-    stats,
-    graphics
+    stats
 RoxygenNote: 7.3.3
